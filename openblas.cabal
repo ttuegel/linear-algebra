@@ -1,0 +1,48 @@
+-- This file has been generated from package.yaml by hpack version 0.18.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           openblas
+version:        0.0.0
+homepage:       https://github.com/ttuegel/openblas#readme
+bug-reports:    https://github.com/ttuegel/openblas/issues
+build-type:     Simple
+cabal-version:  >= 1.10
+
+source-repository head
+  type: git
+  location: https://github.com/ttuegel/openblas
+
+flag use-64bit-int
+  description: Set if your BLAS library uses 64-bit integer indices. (The traditional interface uses 32-bit integers even on 64-bit architectures.)
+  manual: True
+  default: False
+
+library
+  hs-source-dirs:
+      src/
+  default-extensions: DataKinds DeriveDataTypeable DuplicateRecordFields FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures MultiParamTypeClasses OverloadedStrings RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators
+  ghc-options: -Wall
+  extra-libraries:
+      openblas
+  build-depends:
+      base >= 4.10
+    , containers
+    , inline-c
+    , parsers
+    , primitive
+    , template-haskell
+    , vector
+  if flag(use-64bit-int)
+    cpp-options: -DOPENBLAS_USE64BITINT
+  exposed-modules:
+      Data.Dim
+      Data.Int.Blas
+  other-modules:
+      Data.Vector.Blas
+      Internal.Blas
+      Internal.Int
+      Internal.Vector
+      Language.C.Inline.Context.Blas
+      Paths_openblas
+  default-language: Haskell2010

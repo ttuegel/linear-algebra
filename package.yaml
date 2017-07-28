@@ -1,0 +1,50 @@
+name: openblas
+version: 0.0.0
+github: ttuegel/openblas
+
+flags:
+  use-64bit-int:
+    manual: True
+    default: False
+    description:
+      Set if your BLAS library uses 64-bit integer indices.
+      (The traditional interface uses 32-bit integers even
+      on 64-bit architectures.)
+
+ghc-options: -Wall
+
+default-extensions:
+  - DataKinds
+  - DeriveDataTypeable
+  - DuplicateRecordFields
+  - FlexibleContexts
+  - FlexibleInstances
+  - GADTs
+  - GeneralizedNewtypeDeriving
+  - KindSignatures
+  - MultiParamTypeClasses
+  - OverloadedStrings
+  - RecordWildCards
+  - ScopedTypeVariables
+  - TypeFamilies
+  - TypeOperators
+
+dependencies:
+  - base >= 4.10
+  - containers
+  - inline-c
+  - parsers
+  - primitive
+  - template-haskell
+  - vector
+
+library:
+  source-dirs: src/
+  exposed-modules:
+    - Data.Dim
+    - Data.Int.Blas
+  extra-libraries:
+    - openblas
+  when:
+    - condition: flag(use-64bit-int)
+      cpp-options: -DOPENBLAS_USE64BITINT
