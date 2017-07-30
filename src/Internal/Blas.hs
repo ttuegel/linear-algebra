@@ -75,6 +75,161 @@ class Storable a => Scalar a where
     -> Mut (V n) (PrimState m) a  -- ^ vector @y@
     -> m ()
 
+  -- | @y <- alpha A x + beta y@
+  gbmv
+    :: PrimMonad m =>
+       a  -- ^ scalar @alpha@
+    -> GB j k a  -- ^ matrix @A@
+    -> V k a  -- ^ vector @x@
+    -> a  -- ^ scalar @beta@
+    -> Mut (V j) (PrimState m) a  -- ^ vector @y@
+    -> m ()
+
+  -- | @y <- alpha A x + beta y@
+  gemv
+    :: PrimMonad m =>
+       a  -- ^ scalar @alpha@
+    -> GE j k a  -- ^ matrix @A@
+    -> V k a  -- ^ vector @x@
+    -> a  -- ^ scalar @beta@
+    -> Mut (V j) (PrimState m) a  -- ^ vector @y@
+    -> m ()
+
+  -- | @y <- alpha A x + beta y@
+  hbmv
+    :: PrimMonad m =>
+       a  -- ^ scalar @alpha@
+    -> HB n a  -- ^ matrix @A@
+    -> V k a  -- ^ vector @x@
+    -> a  -- ^ scalar @beta@
+    -> Mut (V k) (PrimState m) a  -- ^ vector @y@
+    -> m ()
+
+  -- | @y <- alpha A x + beta y@
+  hemv
+    :: PrimMonad m =>
+       a
+    -> HE n a
+    -> V k a
+    -> a
+    -> Mut (V k) (PrimState m) a
+    -> m ()
+
+  -- | @y <- alpha A x + beta y@
+  hpmv
+    :: PrimMonad m =>
+       a
+    -> HP n a
+    -> V k a
+    -> a
+    -> Mut (V k) (PrimState m) a
+    -> m ()
+
+  -- | @y <- alpha A x + beta y@
+  tbmv
+    :: PrimMonad m =>
+       a
+    -> TB n a
+    -> V k a
+    -> a
+    -> Mut (V k) (PrimState m) a
+    -> m ()
+
+  -- | @y <- alpha A x + beta y@
+  tpmv
+    :: PrimMonad m =>
+       a
+    -> TP n a
+    -> V k a
+    -> a
+    -> Mut (V k) (PrimState m) a
+    -> m ()
+
+  -- | @y <- alpha A x + beta y@
+  trmv
+    :: PrimMonad m =>
+       a
+    -> TR n a
+    -> V k a
+    -> a
+    -> Mut (V k) (PrimState m) a
+    -> m ()
+
+  -- | Compute the solution of a system of linear equations,
+  -- @y <- x@ where @A x = y@.
+  tbsv
+    :: PrimMonad m =>
+       TB n a
+    -> Mut (V k) (PrimState m) a
+    -> m ()
+
+  -- | Compute the solution of a system of linear equations,
+  -- @y <- x@ where @A x = y@.
+  tpsv
+    :: PrimMonad m =>
+       TP n a
+    -> Mut (V k) (PrimState m) a
+    -> m ()
+
+  -- | Compute the solution of a system of linear equations,
+  -- @y <- x@ where @A x = y@.
+  trsv
+    :: PrimMonad m =>
+       TR n a
+    -> Mut (V k) (PrimState m) a
+    -> m ()
+
+  -- | @A <- alpha x y^T + A@
+  geru
+    :: PrimMonad m =>
+       a
+    -> V j a
+    -> V k a
+    -> Mut (GE j k) (PrimState m) a
+    -> m ()
+
+  -- | @A <- alpha x y^H + A@
+  gerc
+    :: PrimMonad m =>
+       a
+    -> V j a
+    -> V k a
+    -> Mut (GE j k) (PrimState m) a
+    -> m ()
+
+  -- | @A <- alpha x x^H + A@
+  her
+    :: PrimMonad m =>
+       RealPart a
+    -> V n a
+    -> Mut (HE n) (PrimState m) a
+    -> m ()
+
+  -- | @A <- alpha x y^H + conj(alpha) y x^H + A@
+  her2
+    :: PrimMonad m =>
+       a
+    -> V n a
+    -> V n a
+    -> Mut (HE n) (PrimState m) a
+    -> m ()
+
+  -- | @A <- alpha x x^H + A@
+  hpr
+    :: PrimMonad m =>
+       RealPart a
+    -> V n a
+    -> Mut (HP n) (PrimState m) a
+    -> m ()
+
+  -- | @A <- alpha x y^H + conj(alpha) y x^H + A@
+  hpr2
+    :: PrimMonad m =>
+       a
+    -> V n a
+    -> V n a
+    -> Mut (HP n) (PrimState m) a
+    -> m ()
 instance Scalar Double where
   type RealPart Double = Double
 
