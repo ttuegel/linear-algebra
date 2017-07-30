@@ -26,10 +26,12 @@ C.include "<cblas.h>"
 
 
 class Storable a => Scalar a where
+  type RealPart a
+
   dotu :: V n a -> V n a -> a
   dotc :: V n a -> V n a -> a
-  asum :: V n a -> Double
-  nrm2 :: V n a -> Double
+  asum :: V n a -> RealPart a
+  nrm2 :: V n a -> RealPart a
   amax :: V n a -> I
   axpy
     :: PrimMonad m =>
@@ -58,6 +60,8 @@ class Storable a => Scalar a where
     -> m ()
 
 instance Scalar Double where
+  type RealPart Double = Double
+
   dotu x y =
     unsafePerformIO $
     unsafeWithV x $ \n ptrx incx ->
@@ -193,6 +197,8 @@ instance Scalar Double where
       |]
 
 instance Scalar (Complex Double) where
+  type RealPart (Complex Double) = Double
+
   dotu x y =
     unsafePerformIO $
     unsafeWithV x $ \n ptrx incx ->
