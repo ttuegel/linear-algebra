@@ -28,11 +28,25 @@ C.include "<cblas.h>"
 class Storable a => Scalar a where
   type RealPart a
 
+  -- | Unconjugated inner (dot) product, @x^T x@.
   dotu :: V n a -> V n a -> a
+
+  -- | Conjugated inner (dot) product, @x^H x@.
   dotc :: V n a -> V n a -> a
+
+  -- | The sum of the real modulus of each element of the vector,
+  -- @sum . map magnitude@.
   asum :: V n a -> RealPart a
+
+  -- | The Euclidean norm of the vector,
+  -- @sqrt . sum . map (\x -> realPart (conjugate x * x))@
   nrm2 :: V n a -> RealPart a
+
+  -- | The index of the element of the vector with the largest real
+  -- modulus.
   amax :: V n a -> I
+
+  -- | @y <- a x + y@
   axpy
     :: PrimMonad m =>
        a  -- ^ scalar @a@
@@ -53,6 +67,8 @@ class Storable a => Scalar a where
        V n a  -- ^ vector @x@
     -> Mut (V n) (PrimState m) a  -- ^ vector @y@
     -> m ()
+
+  -- | @(x, y) <- (y, x)
   swap
     :: PrimMonad m =>
        Mut (V n) (PrimState m) a  -- ^ vector @x@
