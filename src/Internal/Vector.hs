@@ -14,33 +14,28 @@ import qualified Data.Vector.Generic as Vector
 
 import Data.Dim
 import Data.Int.Blas
+import Internal.Mut
 
-
-data Vmut (n :: Dim) s a
-  = Vmut
-    {-# UNPACK #-} !I  -- len
-    {-# UNPACK #-} !(ForeignPtr a)
-    {-# UNPACK #-} !I  -- inc
 
 data V (n :: Dim) a
   = V
-    {-# UNPACK #-} !I  -- len
+    {-# UNPACK #-} !I
     {-# UNPACK #-} !(ForeignPtr a)
-    {-# UNPACK #-} !I  -- inc
+    {-# UNPACK #-} !I
 
-type instance Mutable (V n) = (Vmut n)
+type instance Mutable (V n) = Mut (V n)
 
-instance Storable a => MVector (Vmut n) a where
+instance Storable a => MVector (Mut (V n)) a where
   {-# INLINE basicLength #-}
-  basicLength (Vmut len _ _) = fromIntegral len
+  basicLength (Mut (V n _ _)) = fromIntegral n
 
   {-# INLINE basicUnsafeSlice #-}
-  basicUnsafeSlice start len (Vmut _ ptr inc) =
-    let ptr' = advanceForeignPtr ptr (start * fromIntegral inc) in
-      Vmut (fromIntegral len) ptr' inc
+  basicUnsafeSlice start len (Mut (V _ fptr inc)) =
+    let off = start * fromIntegral inc in
+      Mut (V (fromIntegral len) (advanceForeignPtr fptr off) inc)
 
   {-# INLINE basicOverlaps #-}
-  basicOverlaps (Vmut lenx ptrx incx) (Vmut leny ptry incy) =
+  basicOverlaps (Mut (V lenx ptrx incx)) (Mut (V leny ptry incy)) =
       between ptrx ptry (leny * incy)
       || between ptry ptrx (lenx * incx)
     where
@@ -53,90 +48,65 @@ instance Storable a => MVector (Vmut n) a where
     | len > mx =
         error ("Blas.basicUnsafeNew: length too large: " ++ show len)
     | otherwise = unsafePrimToPrim $ do
-        fptr <- mallocForeignPtrArray len
-        pure (Vmut (fromIntegral len) fptr 1)
+        ptr <- mallocForeignPtrArray len
+        pure $ Mut (V (fromIntegral len) ptr 1)
     where
       maxI = fromIntegral (maxBound :: I) :: Int
-      size = sizeOf (undefined :: a)
+      size = sizeOf (undefined :: Double)
       mx = maxI `quot` size
 
   {-# INLINE basicInitialize #-}
-  basicInitialize x =
+  basicInitialize (Mut (V len fptr inc)) =
     unsafePrimToPrim $
-    withVmut x $ \len ptr inc -> do
+    withForeignPtr fptr $ \ptr -> do
       let
         end = fromIntegral (inc * len)
         inc_ = fromIntegral inc
-        sz = sizeOf (undefined :: a)
-      let basicInitialize_go ix
-            | ix >= end = pure ()
-            | otherwise = do
-                fillBytes (advancePtr ptr ix) 0 sz
-                basicInitialize_go (ix + inc_)
+        sz = sizeOf (undefined :: Double)
+
+        basicInitialize_go ix
+          | ix >= end = pure ()
+          | otherwise = do
+              fillBytes (advancePtr ptr ix) 0 sz
+              basicInitialize_go (ix + inc_)
+
       basicInitialize_go 0
 
   {-# INLINE basicUnsafeRead #-}
-  basicUnsafeRead x ix =
+  basicUnsafeRead (Mut (V _ fptr inc)) ix =
     unsafePrimToPrim $
-    withVmut x $ \_ ptr inc ->
-      peekElemOff ptr (ix * fromIntegral inc)
+      withForeignPtr fptr $ \ptr ->
+        peekElemOff ptr (ix * fromIntegral inc)
 
   {-# INLINE basicUnsafeWrite #-}
-  basicUnsafeWrite x ix a =
+  basicUnsafeWrite (Mut (V _ fptr inc)) ix a = do
     unsafePrimToPrim $
-    withVmut x $ \_ ptr inc ->
-      pokeElemOff ptr (ix * fromIntegral inc) a
+      withForeignPtr fptr $ \ptr ->
+        pokeElemOff ptr (ix * fromIntegral inc) a
 
 instance Storable a => Vector (V n) a where
   {-# INLINE basicUnsafeFreeze #-}
-  basicUnsafeFreeze (Vmut len ptr inc) =
-    pure (V len ptr inc)
+  basicUnsafeFreeze (Mut v) = pure v
 
   {-# INLINE basicUnsafeThaw #-}
-  basicUnsafeThaw (V len ptr inc) =
-    pure (Vmut len ptr inc)
+  basicUnsafeThaw v = pure (Mut v)
 
   {-# INLINE basicLength #-}
   basicLength (V len _ _) = fromIntegral len
 
   {-# INLINE basicUnsafeSlice #-}
-  basicUnsafeSlice start len (V _ ptr inc) =
-    let ptr' = advanceForeignPtr ptr (start * fromIntegral inc) in
-      V (fromIntegral len) ptr' inc
+  basicUnsafeSlice start len (V _ fptr inc) =
+    let off = start * fromIntegral inc in
+      V (fromIntegral len) (advanceForeignPtr fptr off) inc
 
   {-# INLINE basicUnsafeIndexM #-}
   basicUnsafeIndexM (V _ fptr inc) ix =
-    pure . unsafeInlineIO $ withForeignPtr fptr $ \ptr ->
-      peekElemOff ptr (ix * fromIntegral inc)
+    return . unsafeInlineIO $
+      withForeignPtr fptr $ \ptr ->
+        peekElemOff ptr (ix * fromIntegral inc)
 
-  {-# INLINE basicUnsafeCopy #-}
-  basicUnsafeCopy y x =
-    unsafePrimToPrim $
-    withVmut y $ \len ptry incy ->
-    unsafeWithV x $ \_ ptrx incx -> do
-      let
-        end = fromIntegral (incy * len)
-        incx_ = fromIntegral incx
-        incy_ = fromIntegral incy
-      let basicUnsafeCopy_go ixx ixy
-            | ixy >= end = pure ()
-            | otherwise = do
-                a <- peekElemOff ptrx ixx
-                pokeElemOff ptry ixy a
-                basicUnsafeCopy_go (ixx + incx_) (ixy + incy_)
-      basicUnsafeCopy_go 0 0
-
-unsafeWithV :: Storable a => V n a -> (I -> Ptr a -> I -> IO b) -> IO b
-unsafeWithV (V len fptr inc) cont =
-  withForeignPtr fptr $ \ptr -> cont len ptr inc
-
-withVmut
-  :: Storable a =>
-     Vmut n s a
-  -> (I -> Ptr a -> I -> IO b)
-  -> IO b
-withVmut (Vmut len fptr inc) cont =
-  withForeignPtr fptr $ \ptr -> cont len ptr inc
+  {-# INLINE elemseq #-}
+  elemseq _ = seq
 
 advanceForeignPtr
   :: forall a. Storable a =>
@@ -146,3 +116,11 @@ advanceForeignPtr
 advanceForeignPtr fptr n = plusForeignPtr fptr (n * size)
   where
     size = sizeOf (undefined :: a)
+
+unsafeWithV :: V n a -> (I -> Ptr a -> I -> IO b) -> IO b
+unsafeWithV (V len fptr inc) cont =
+  withForeignPtr fptr $ \ptr -> cont len ptr inc
+
+withV :: Mut (V n) s a -> (I -> Ptr a -> I -> IO b) -> IO b
+withV (Mut (V len fptr inc)) cont =
+  withForeignPtr fptr $ \ptr -> cont len ptr inc

@@ -21,7 +21,7 @@ flag use-64bit-int
 library
   hs-source-dirs:
       src/
-  default-extensions: DataKinds DeriveDataTypeable DuplicateRecordFields FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures MultiParamTypeClasses OverloadedStrings RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators
+  default-extensions: DataKinds DeriveDataTypeable DuplicateRecordFields FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures MultiParamTypeClasses OverloadedStrings RankNTypes RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators
   ghc-options: -Wall
   extra-libraries:
       openblas
@@ -42,6 +42,8 @@ library
       Data.Vector.Blas
       Internal.Blas
       Internal.Int
+      Internal.Matrix
+      Internal.Mut
       Internal.Vector
       Language.C.Inline.Context.Blas
       Paths_openblas

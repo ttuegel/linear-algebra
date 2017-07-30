@@ -16,6 +16,8 @@ import System.IO.Unsafe (unsafePerformIO)
 import qualified Language.C.Inline as C
 
 import Internal.Int
+import Internal.Matrix
+import Internal.Mut
 import Internal.Vector
 import Language.C.Inline.Context.Blas
 
@@ -33,14 +35,26 @@ class Storable a => Scalar a where
     :: PrimMonad m =>
        a  -- ^ scalar @a@
     -> V n a  -- ^ vector @x@
-    -> Vmut n (PrimState m) a  -- ^ vector @y@
+    -> Mut (V n) (PrimState m) a  -- ^ vector @y@
     -> m ()
-  scal :: PrimMonad m => a -> Vmut n (PrimState m) a -> m ()
-  copy :: PrimMonad m => V n a -> Vmut n (PrimState m) a -> m ()
+
+  -- | @x <- a x@
+  scal
+    :: PrimMonad m =>
+       a  -- ^ scalar @a@
+    -> Mut (V n) (PrimState m) a  -- ^ vector @x@
+    -> m ()
+
+  -- | @y <- x@
+  copy
+    :: PrimMonad m =>
+       V n a  -- ^ vector @x@
+    -> Mut (V n) (PrimState m) a  -- ^ vector @y@
+    -> m ()
   swap
     :: PrimMonad m =>
-       Vmut n (PrimState m) a
-    -> Vmut n (PrimState m) a
+       Mut (V n) (PrimState m) a  -- ^ vector @x@
+    -> Mut (V n) (PrimState m) a  -- ^ vector @y@
     -> m ()
 
 instance Scalar Double where
@@ -118,7 +132,7 @@ instance Scalar Double where
   axpy a x y =
     unsafePrimToPrim $
     unsafeWithV x $ \n ptrx incx ->
-    withVmut y $ \_ ptry incy ->
+    withV y $ \_ ptry incy ->
       [C.block|
         void {
           cblas_daxpy
@@ -134,7 +148,7 @@ instance Scalar Double where
 
   scal a x =
     unsafePrimToPrim $
-    withVmut x $ \n ptr inc ->
+    withV x $ \n ptr inc ->
       [C.exp|
         void {
           cblas_dscal
@@ -149,7 +163,7 @@ instance Scalar Double where
   copy x y =
     unsafePrimToPrim $
     unsafeWithV x $ \n ptrx incx ->
-    withVmut y $ \_ ptry incy ->
+    withV y $ \_ ptry incy ->
       [C.exp|
         void {
           cblas_dcopy
@@ -164,8 +178,8 @@ instance Scalar Double where
 
   swap x y =
     unsafePrimToPrim $
-    withVmut x $ \n ptrx incx ->
-    withVmut y $ \_ ptry incy ->
+    withV x $ \n ptrx incx ->
+    withV y $ \_ ptry incy ->
       [C.exp|
         void {
           cblas_dswap
@@ -259,7 +273,7 @@ instance Scalar (Complex Double) where
   axpy a x y =
     unsafePrimToPrim $
     unsafeWithV x $ \n ptrx incx ->
-    withVmut y $ \_ ptry incy ->
+    withV y $ \_ ptry incy ->
     with a $ \pa ->
       [C.block|
         void {
@@ -276,7 +290,7 @@ instance Scalar (Complex Double) where
 
   scal a x =
     unsafePrimToPrim $
-    withVmut x $ \n ptr inc ->
+    withV x $ \n ptr inc ->
     with a $ \pa ->
       [C.block|
         void {
@@ -292,7 +306,7 @@ instance Scalar (Complex Double) where
   copy x y =
     unsafePrimToPrim $
     unsafeWithV x $ \n ptrx incx ->
-    withVmut y $ \_ ptry incy ->
+    withV y $ \_ ptry incy ->
       [C.exp|
         void {
           cblas_zcopy
@@ -307,8 +321,8 @@ instance Scalar (Complex Double) where
 
   swap x y =
     unsafePrimToPrim $
-    withVmut x $ \n ptrx incx ->
-    withVmut y $ \_ ptry incy ->
+    withV x $ \n ptrx incx ->
+    withV y $ \_ ptry incy ->
       [C.exp|
         void {
           cblas_zswap
