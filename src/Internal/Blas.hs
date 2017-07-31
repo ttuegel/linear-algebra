@@ -540,6 +540,27 @@ instance Scalar Double where
         }
       |]
 
+  hpmv alpha a x beta y =
+    unsafePrimToPrim $
+    unsafeWithHP a $ \uplo nn pa ->
+    unsafeWithV x $ \_ px incx ->
+    withV y $ \_ py incy ->
+      [C.block|
+        void {
+          BLASFUN(dspmv)
+          ( $uplo:uplo
+          , &$(blasint nn)
+          , $(double alpha)
+          , $(double* pa)
+          , $(double* px)
+          , &$(blasint incx)
+          , $(double beta)
+          , $(double* py)
+          , &$(blasint incy)
+          )
+        }
+      |]
+
 instance Scalar (Complex Double) where
   type RealPart (Complex Double) = Double
 
@@ -897,6 +918,29 @@ instance Scalar (Complex Double) where
           , (double*)$(openblas_complex_double* palpha)
           , (double*)$(openblas_complex_double* pa)
           , &$(blasint lda)
+          , (double*)$(openblas_complex_double* px)
+          , &$(blasint incx)
+          , (double*)$(openblas_complex_double* pbeta)
+          , (double*)$(openblas_complex_double* py)
+          , &$(blasint incy)
+          )
+        }
+      |]
+
+  hpmv alpha a x beta y =
+    unsafePrimToPrim $
+    with alpha $ \palpha ->
+    unsafeWithHP a $ \uplo nn pa ->
+    unsafeWithV x $ \_ px incx ->
+    with beta $ \pbeta ->
+    withV y $ \_ py incy ->
+      [C.block|
+        void {
+          BLASFUN(zhpmv)
+          ( $uplo:uplo
+          , &$(blasint nn)
+          , (double*)$(openblas_complex_double* palpha)
+          , (double*)$(openblas_complex_double* pa)
           , (double*)$(openblas_complex_double* px)
           , &$(blasint incx)
           , (double*)$(openblas_complex_double* pbeta)
