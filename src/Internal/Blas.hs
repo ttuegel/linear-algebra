@@ -22,6 +22,7 @@ import Internal.Vector
 import Language.C.Inline.Context.Blas
 
 C.context (baseCtx <> blasCtx)
+C.include "<cblas.h>"
 C.include "<f77blas.h>"
 
 
@@ -446,6 +447,31 @@ instance Scalar Double where
         }
       |]
 
+  gbmv alpha a x beta y =
+    unsafePrimToPrim $
+    unsafeWithGB a $ \trans m n kl ku pa lda ->
+    unsafeWithV x $ \_ px incx ->
+    withV y $ \_ py incy ->
+      [C.block|
+        void {
+          BLASFUN(dgbmv)
+          ( $trans:trans
+          , &$(blasint m)
+          , &$(blasint n)
+          , &$(blasint kl)
+          , &$(blasint ku)
+          , &$(double alpha)
+          , $(double* pa)
+          , &$(blasint lda)
+          , $(double* px)
+          , &$(blasint incx)
+          , &$(double beta)
+          , $(double* py)
+          , &$(blasint incy)
+          )
+        }
+      |]
+
 instance Scalar (Complex Double) where
   type RealPart (Complex Double) = Double
 
@@ -706,6 +732,33 @@ instance Scalar (Complex Double) where
           , (double*)$(openblas_complex_double* ptrx)
           , &$(blasint incx)
           , (double*)$(openblas_complex_double* ptry)
+          , &$(blasint incy)
+          )
+        }
+      |]
+
+  gbmv alpha a x beta y =
+    unsafePrimToPrim $
+    with alpha $ \palpha ->
+    unsafeWithGB a $ \trans m n kl ku pa lda ->
+    unsafeWithV x $ \_ px incx ->
+    with beta $ \pbeta ->
+    withV y $ \_ py incy ->
+      [C.block|
+        void {
+          BLASFUN(zgbmv)
+          ( $trans:trans
+          , &$(blasint m)
+          , &$(blasint n)
+          , &$(blasint kl)
+          , &$(blasint ku)
+          , (double*)$(openblas_complex_double* palpha)
+          , (double*)$(openblas_complex_double* pa)
+          , &$(blasint lda)
+          , (double*)$(openblas_complex_double* px)
+          , &$(blasint incx)
+          , (double*)$(openblas_complex_double* pbeta)
+          , (double*)$(openblas_complex_double* py)
           , &$(blasint incy)
           )
         }
