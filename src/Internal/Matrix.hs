@@ -12,7 +12,7 @@ data UpLo = Upper | Lower
 
 data Diag = Unit | NonUnit
 
-data Trans = NoTrans | Trans | ConjTrans | ConjNoTrans
+data Trans = NoTrans | Trans | ConjTrans
 
 data GE (m :: Dim) (n :: Dim) a
   = GE !Trans

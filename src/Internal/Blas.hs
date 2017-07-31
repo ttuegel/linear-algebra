@@ -22,7 +22,7 @@ import Internal.Vector
 import Language.C.Inline.Context.Blas
 
 C.context (baseCtx <> blasCtx)
-C.include "<cblas.h>"
+C.include "<f77blas.h>"
 
 
 class Storable a => Scalar a where
@@ -44,10 +44,27 @@ class Storable a => Scalar a where
 
   -- | The index of the element of the vector with the largest real
   -- modulus.
-  amax :: V n a -> I
+  iamax :: V n a -> I
+  amax :: V n a -> RealPart a
+
+  -- | The index of the element of the vector with the smallest real
+  -- modulus.
+  iamin :: V n a -> I
+  amin :: V n a -> RealPart a
+
+  max :: V n a -> RealPart a
+  min :: V n a -> RealPart a
 
   -- | @y <- a x + y@
   axpy
+    :: PrimMonad m =>
+       a  -- ^ scalar @a@
+    -> V n a  -- ^ vector @x@
+    -> Mut (V n) (PrimState m) a  -- ^ vector @y@
+    -> m ()
+
+  -- | @y <- a conj(x) + y@
+  axpyc
     :: PrimMonad m =>
        a  -- ^ scalar @a@
     -> V n a  -- ^ vector @x@
@@ -58,6 +75,13 @@ class Storable a => Scalar a where
   scal
     :: PrimMonad m =>
        a  -- ^ scalar @a@
+    -> Mut (V n) (PrimState m) a  -- ^ vector @x@
+    -> m ()
+
+  -- | @x <- a x@
+  rscal
+    :: PrimMonad m =>
+       RealPart a  -- ^ scalar @a@
     -> Mut (V n) (PrimState m) a  -- ^ vector @x@
     -> m ()
 
@@ -239,41 +263,105 @@ instance Scalar Double where
     unsafeWithV y $ \_ ptry incy ->
       [C.exp|
         double {
-          cblas_ddot
-          ( $(blasint n)
+          BLASFUNC(ddot)
+          ( &$(blasint n)
           , $(double* ptrx)
-          , $(blasint incx)
+          , &$(blasint incx)
           , $(double* ptry)
-          , $(blasint incy)
+          , &$(blasint incy)
           )
         }
       |]
 
-  dotc x y =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptrx incx ->
-    unsafeWithV y $ \_ ptry incy ->
-      [C.exp|
-        double {
-          cblas_ddot
-          ( $(blasint n)
-          , $(double* ptrx)
-          , $(blasint incx)
-          , $(double* ptry)
-          , $(blasint incy)
-          )
-        }
-      |]
+  dotc = dotu
 
   asum x =
     unsafePerformIO $
     unsafeWithV x $ \n ptr inc ->
       [C.exp|
         double {
-          cblas_dasum
-          ( $(blasint n)
+          BLASFUNC(dasum)
+          ( &$(blasint n)
           , $(double* ptr)
-          , $(blasint inc)
+          , &$(blasint inc)
+          )
+        }
+      |]
+
+  iamax x =
+    unsafePerformIO $
+    unsafeWithV x $ \n ptr inc ->
+      [C.exp|
+        blasint {
+          BLASFUNC(idamax)
+          ( &$(blasint n)
+          , $(double* ptr)
+          , &$(blasint inc)
+          )
+        }
+      |]
+
+  amax x =
+    unsafePerformIO $
+    unsafeWithV x $ \n ptr inc ->
+      [C.exp|
+        double {
+          BLASFUNC(damax)
+          ( &$(blasint n)
+          , $(double* ptr)
+          , &$(blasint inc)
+          )
+        }
+      |]
+
+  iamin x =
+    unsafePerformIO $
+    unsafeWithV x $ \n ptr inc ->
+      [C.exp|
+        blasint {
+          BLASFUNC(idamin)
+          ( &$(blasint n)
+          , $(double* ptr)
+          , &$(blasint inc)
+          )
+        }
+      |]
+
+  amin x =
+    unsafePerformIO $
+    unsafeWithV x $ \n ptr inc ->
+      [C.exp|
+        double {
+          BLASFUNC(damin)
+          ( &$(blasint n)
+          , $(double* ptr)
+          , &$(blasint inc)
+          )
+        }
+      |]
+
+  max x =
+    unsafePerformIO $
+    unsafeWithV x $ \n ptr inc ->
+      [C.exp|
+        double {
+          BLASFUNC(dmax)
+          ( &$(blasint n)
+          , $(double* ptr)
+          , &$(blasint inc)
+          )
+        }
+      |]
+
+  min x =
+    unsafePerformIO $
+    unsafeWithV x $ \n ptr inc ->
+      [C.exp|
+        double {
+          BLASFUNC(dmin)
+          ( &$(blasint n)
+          , $(double* ptr)
+          , &$(blasint inc)
           )
         }
       |]
@@ -283,23 +371,10 @@ instance Scalar Double where
     unsafeWithV x $ \n ptr inc ->
       [C.exp|
         double {
-          cblas_dnrm2
-          ( $(blasint n)
+          BLASFUNC(dnrm2)
+          ( &$(blasint n)
           , $(double* ptr)
-          , $(blasint inc)
-          )
-        }
-      |]
-
-  amax x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        blasint {
-          cblas_idamax
-          ( $(blasint n)
-          , $(double* ptr)
-          , $(blasint inc)
+          , &$(blasint inc)
           )
         }
       |]
@@ -310,30 +385,34 @@ instance Scalar Double where
     withV y $ \_ ptry incy ->
       [C.block|
         void {
-          cblas_daxpy
-          ( $(blasint n)
-          , $(double a)
+          BLASFUNC(daxpy)
+          ( &$(blasint n)
+          , &$(double a)
           , $(double* ptrx)
-          , $(blasint incx)
+          , &$(blasint incx)
           , $(double* ptry)
-          , $(blasint incy)
+          , &$(blasint incy)
           );
         }
       |]
+
+  axpyc = axpy
 
   scal a x =
     unsafePrimToPrim $
     withV x $ \n ptr inc ->
       [C.exp|
         void {
-          cblas_dscal
-          ( $(blasint n)
-          , $(double a)
+          BLASFUNC(dscal)
+          ( &$(blasint n)
+          , &$(double a)
           , $(double* ptr)
-          , $(blasint inc)
+          , &$(blasint inc)
           )
         }
       |]
+
+  rscal = scal
 
   copy x y =
     unsafePrimToPrim $
@@ -341,12 +420,12 @@ instance Scalar Double where
     withV y $ \_ ptry incy ->
       [C.exp|
         void {
-          cblas_dcopy
-          ( $(blasint n)
+          BLASFUNC(dcopy)
+          ( &$(blasint n)
           , $(double* ptrx)
-          , $(blasint incx)
+          , &$(blasint incx)
           , $(double* ptry)
-          , $(blasint incy)
+          , &$(blasint incy)
           )
         }
       |]
@@ -357,12 +436,12 @@ instance Scalar Double where
     withV y $ \_ ptry incy ->
       [C.exp|
         void {
-          cblas_dswap
-          ( $(blasint n)
+          BLASFUNC(dswap)
+          ( &$(blasint n)
           , $(double* ptrx)
-          , $(blasint incx)
+          , &$(blasint incx)
           , $(double* ptry)
-          , $(blasint incy)
+          , &$(blasint incy)
           )
         }
       |]
@@ -377,14 +456,25 @@ instance Scalar (Complex Double) where
     alloca $ \z -> do
       [C.block|
         void {
+          #ifdef RETURN_BY_STACK
+          BLASFUNC(zdotu)
+          ( $(openblas_complex_double* z)
+          , &$(blasint n)
+          , (double*)$(openblas_complex_double* ptrx)
+          , &$(blasint incx)
+          , (double*)$(openblas_complex_double* ptry)
+          , &$(blasint incy)
+          )
+          #else
           *$(openblas_complex_double* z) =
-              cblas_zdotu
-              ( $(blasint n)
-              , (double*)$(openblas_complex_double* ptrx)
-              , $(blasint incx)
-              , (double*)$(openblas_complex_double* ptry)
-              , $(blasint incy)
-              );
+          BLASFUNC(zdotu)
+          ( &$(blasint n)
+          , (double*)$(openblas_complex_double* ptrx)
+          , &$(blasint incx)
+          , (double*)$(openblas_complex_double* ptry)
+          , &$(blasint incy)
+          );
+          #endif
         }
       |]
       peek z
@@ -396,14 +486,25 @@ instance Scalar (Complex Double) where
     alloca $ \z -> do
       [C.block|
         void {
+          #ifdef RETURN_BY_STACK
+          BLASFUNC(zdotc)
+          ( $(openblas_complex_double* z)
+          , &$(blasint n)
+          , (double*)$(openblas_complex_double* ptrx)
+          , &$(blasint incx)
+          , (double*)$(openblas_complex_double* ptry)
+          , &$(blasint incy)
+          )
+          #else
           *$(openblas_complex_double* z) =
-              cblas_zdotc
-              ( $(blasint n)
-              , (double*)$(openblas_complex_double* ptrx)
-              , $(blasint incx)
-              , (double*)$(openblas_complex_double* ptry)
-              , $(blasint incy)
-              );
+          BLASFUNC(zdotc)
+          ( &$(blasint n)
+          , (double*)$(openblas_complex_double* ptrx)
+          , &$(blasint incx)
+          , (double*)$(openblas_complex_double* ptry)
+          , &$(blasint incy)
+          );
+          #endif
         }
       |]
       peek z
@@ -413,10 +514,88 @@ instance Scalar (Complex Double) where
     unsafeWithV x $ \n ptr inc ->
       [C.exp|
         double {
-          cblas_dzasum
-          ( $(blasint n)
+          BLASFUNC(dzasum)
+          ( &$(blasint n)
           , (double*)$(openblas_complex_double* ptr)
-          , $(blasint inc)
+          , &$(blasint inc)
+          )
+        }
+      |]
+
+  iamax x =
+    unsafePerformIO $
+    unsafeWithV x $ \n ptr inc ->
+      [C.exp|
+        blasint {
+          BLASFUNC(izamax)
+          ( &$(blasint n)
+          , (double*)$(openblas_complex_double* ptr)
+          , &$(blasint inc)
+          )
+        }
+      |]
+
+  amax x =
+    unsafePerformIO $
+    unsafeWithV x $ \n ptr inc ->
+      [C.exp|
+        double {
+          BLASFUNC(dzamax)
+          ( &$(blasint n)
+          , (double*)$(openblas_complex_double* ptr)
+          , &$(blasint inc)
+          )
+        }
+      |]
+
+  iamin x =
+    unsafePerformIO $
+    unsafeWithV x $ \n ptr inc ->
+      [C.exp|
+        blasint {
+          BLASFUNC(izamin)
+          ( &$(blasint n)
+          , (double*)$(openblas_complex_double* ptr)
+          , &$(blasint inc)
+          )
+        }
+      |]
+
+  amin x =
+    unsafePerformIO $
+    unsafeWithV x $ \n ptr inc ->
+      [C.exp|
+        double {
+          BLASFUNC(dzamin)
+          ( &$(blasint n)
+          , (double*)$(openblas_complex_double* ptr)
+          , &$(blasint inc)
+          )
+        }
+      |]
+
+  max x =
+    unsafePerformIO $
+    unsafeWithV x $ \n ptr inc ->
+      [C.exp|
+        double {
+          BLASFUNC(dzmax)
+          ( &$(blasint n)
+          , (double*)$(openblas_complex_double* ptr)
+          , &$(blasint inc)
+          )
+        }
+      |]
+
+  min x =
+    unsafePerformIO $
+    unsafeWithV x $ \n ptr inc ->
+      [C.exp|
+        double {
+          BLASFUNC(dzmin)
+          ( &$(blasint n)
+          , (double*)$(openblas_complex_double* ptr)
+          , &$(blasint inc)
           )
         }
       |]
@@ -426,23 +605,10 @@ instance Scalar (Complex Double) where
     unsafeWithV x $ \n ptr inc ->
       [C.exp|
         double {
-          cblas_dznrm2
-          ( $(blasint n)
+          BLASFUNC(dznrm2)
+          ( &$(blasint n)
           , (double*)$(openblas_complex_double* ptr)
-          , $(blasint inc)
-          )
-        }
-      |]
-
-  amax x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        blasint {
-          cblas_izamax
-          ( $(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , $(blasint inc)
+          , &$(blasint inc)
           )
         }
       |]
@@ -454,13 +620,31 @@ instance Scalar (Complex Double) where
     with a $ \pa ->
       [C.block|
         void {
-          cblas_zaxpy
-          ( $(blasint n)
+          BLASFUNC(zaxpy)
+          ( &$(blasint n)
           , (double*)$(openblas_complex_double* pa)
           , (double*)$(openblas_complex_double* ptrx)
-          , $(blasint incx)
+          , &$(blasint incx)
           , (double*)$(openblas_complex_double* ptry)
-          , $(blasint incy)
+          , &$(blasint incy)
+          );
+        }
+      |]
+
+  axpyc a x y =
+    unsafePrimToPrim $
+    unsafeWithV x $ \n ptrx incx ->
+    withV y $ \_ ptry incy ->
+    with a $ \pa ->
+      [C.block|
+        void {
+          BLASFUNC(zaxpyc)
+          ( &$(blasint n)
+          , (double*)$(openblas_complex_double* pa)
+          , (double*)$(openblas_complex_double* ptrx)
+          , &$(blasint incx)
+          , (double*)$(openblas_complex_double* ptry)
+          , &$(blasint incy)
           );
         }
       |]
@@ -471,11 +655,26 @@ instance Scalar (Complex Double) where
     with a $ \pa ->
       [C.block|
         void {
-          cblas_zscal
-          ( $(blasint n)
+          BLASFUNC(zscal)
+          ( &$(blasint n)
           , (double*)$(openblas_complex_double* pa)
           , (double*)$(openblas_complex_double* ptr)
-          , $(blasint inc)
+          , &$(blasint inc)
+          );
+        }
+      |]
+
+  rscal a x =
+    unsafePrimToPrim $
+    withV x $ \n ptr inc ->
+    with a $ \pa ->
+      [C.block|
+        void {
+          BLASFUNC(zdscal)
+          ( &$(blasint n)
+          , $(double* pa)
+          , (double*)$(openblas_complex_double* ptr)
+          , &$(blasint inc)
           );
         }
       |]
@@ -486,12 +685,12 @@ instance Scalar (Complex Double) where
     withV y $ \_ ptry incy ->
       [C.exp|
         void {
-          cblas_zcopy
-          ( $(blasint n)
+          BLASFUNC(zcopy)
+          ( &$(blasint n)
           , (double*)$(openblas_complex_double* ptrx)
-          , $(blasint incx)
+          , &$(blasint incx)
           , (double*)$(openblas_complex_double* ptry)
-          , $(blasint incy)
+          , &$(blasint incy)
           )
         }
       |]
@@ -503,11 +702,11 @@ instance Scalar (Complex Double) where
       [C.exp|
         void {
           cblas_zswap
-          ( $(blasint n)
+          ( &$(blasint n)
           , (double*)$(openblas_complex_double* ptrx)
-          , $(blasint incx)
+          , &$(blasint incx)
           , (double*)$(openblas_complex_double* ptry)
-          , $(blasint incy)
+          , &$(blasint incy)
           )
         }
       |]
