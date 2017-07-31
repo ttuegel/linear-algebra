@@ -609,6 +609,63 @@ instance Scalar Double where
         }
       |]
 
+  tbsv a x =
+    unsafePrimToPrim $
+    unsafeWithTB a $ \uplo trans diag nn kk pa lda ->
+    withV x $ \_ px incx ->
+      [C.block|
+        void {
+          BLASFUN(dtbsv)
+          ( $uplo:uplo
+          , $trans:trans
+          , $diag:diag
+          , &$(blasint nn)
+          , &$(blasint kk)
+          , $(double* pa)
+          , &$(blasint lda)
+          , $(double* px)
+          , &$(blasint incx)
+          )
+        }
+      |]
+
+  tpsv a x =
+    unsafePrimToPrim $
+    unsafeWithTP a $ \uplo trans diag nn pa ->
+    withV x $ \_ px incx ->
+      [C.block|
+        void {
+          BLASFUN(dtpsv)
+          ( $uplo:uplo
+          , $trans:trans
+          , $diag:diag
+          , &$(blasint nn)
+          , $(double* pa)
+          , $(double* px)
+          , &$(blasint incx)
+          )
+        }
+      |]
+
+  trsv a x =
+    unsafePrimToPrim $
+    unsafeWithTR a $ \uplo trans diag nn pa lda ->
+    withV x $ \_ px incx ->
+      [C.block|
+        void {
+          BLASFUN(dtrsv)
+          ( $uplo:uplo
+          , $trans:trans
+          , $diag:diag
+          , &$(blasint nn)
+          , $(double* pa)
+          , &$(blasint lda)
+          , $(double* px)
+          , &$(blasint incx)
+          )
+        }
+      |]
+
 instance Scalar (Complex Double) where
   type RealPart (Complex Double) = Double
 
@@ -1043,6 +1100,63 @@ instance Scalar (Complex Double) where
       [C.block|
         void {
           BLASFUN(ztrmv)
+          ( $uplo:uplo
+          , $trans:trans
+          , $diag:diag
+          , &$(blasint nn)
+          , (double*)$(openblas_complex_double* pa)
+          , &$(blasint lda)
+          , (double*)$(openblas_complex_double* px)
+          , &$(blasint incx)
+          )
+        }
+      |]
+
+  tbsv a x =
+    unsafePrimToPrim $
+    unsafeWithTB a $ \uplo trans diag nn kk pa lda ->
+    withV x $ \_ px incx ->
+      [C.block|
+        void {
+          BLASFUN(ztbsv)
+          ( $uplo:uplo
+          , $trans:trans
+          , $diag:diag
+          , &$(blasint nn)
+          , &$(blasint kk)
+          , (double*)$(openblas_complex_double* pa)
+          , &$(blasint lda)
+          , (double*)$(openblas_complex_double* px)
+          , &$(blasint incx)
+          )
+        }
+      |]
+
+  tpsv a x =
+    unsafePrimToPrim $
+    unsafeWithTP a $ \uplo trans diag nn pa ->
+    withV x $ \_ px incx ->
+      [C.block|
+        void {
+          BLASFUN(ztpsv)
+          ( $uplo:uplo
+          , $trans:trans
+          , $diag:diag
+          , &$(blasint nn)
+          , (double*)$(openblas_complex_double* pa)
+          , (double*)$(openblas_complex_double* px)
+          , &$(blasint incx)
+          )
+        }
+      |]
+
+  trsv a x =
+    unsafePrimToPrim $
+    unsafeWithTR a $ \uplo trans diag nn pa lda ->
+    withV x $ \_ px incx ->
+      [C.block|
+        void {
+          BLASFUN(ztrsv)
           ( $uplo:uplo
           , $trans:trans
           , $diag:diag
