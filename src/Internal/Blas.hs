@@ -13,6 +13,7 @@ import Language.C.Inline.Context (baseCtx)
 import Prelude hiding (length)
 import System.IO.Unsafe (unsafePerformIO)
 
+import qualified Data.Vector.Generic as V
 import qualified Language.C.Inline as C
 
 import Internal.Int
@@ -666,6 +667,47 @@ instance Scalar Double where
         }
       |]
 
+  geru alpha x y a =
+    unsafePrimToPrim $
+    unsafeWithV x $ \_ px incx ->
+    unsafeWithV y $ \_ py incy ->
+    withGE a $ \trans nr nc pa lda ->
+      case trans of
+        NoTrans ->
+          [C.block|
+            void {
+              BLASFUNC(dger)
+              ( &$(blasint nr)
+              , &$(blasint nc)
+              , $(double alpha)
+              , $(double* px)
+              , &$(blasint incx)
+              , $(double* py)
+              , &$(blasint incy)
+              , $(double* pa)
+              , &$(blasint lda)
+              )
+            }
+          |]
+        _ ->
+          [C.block|
+            void {
+              BLASFUNC(dger)
+              ( &$(blasint nr)
+              , &$(blasint nc)
+              , $(double alpha)
+              , $(double* py)
+              , &$(blasint incy)
+              , $(double* px)
+              , &$(blasint incx)
+              , $(double* pa)
+              , &$(blasint lda)
+              )
+            }
+          |]
+
+  gerc = geru
+
 instance Scalar (Complex Double) where
   type RealPart (Complex Double) = Double
 
@@ -1168,3 +1210,123 @@ instance Scalar (Complex Double) where
           )
         }
       |]
+
+  geru alpha x y a =
+    unsafePrimToPrim $
+    unsafeWithV x $ \_ px incx ->
+    withGE a $ \trans nr nc pa lda ->
+      case trans of
+        NoTrans ->
+          with alpha $ \palpha ->
+          unsafeWithV y $ \_ py incy ->
+            [C.block|
+              void {
+                BLASFUNC(zgeru)
+                ( &$(blasint nr)
+                , &$(blasint nc)
+                , (double*)$(openblas_complex_double* palpha)
+                , (double*)$(openblas_complex_double* px)
+                , &$(blasint incx)
+                , (double*)$(openblas_complex_double* py)
+                , &$(blasint incy)
+                , (double*)$(openblas_complex_double* pa)
+                , &$(blasint lda)
+                )
+              }
+            |]
+        Trans ->
+          with alpha $ \palpha ->
+          unsafeWithV y $ \_ py incy ->
+            [C.block|
+              void {
+                BLASFUNC(zgeru)
+                ( &$(blasint nr)
+                , &$(blasint nc)
+                , (double*)$(openblas_complex_double* palpha)
+                , (double*)$(openblas_complex_double* py)
+                , &$(blasint incy)
+                , (double*)$(openblas_complex_double* px)
+                , &$(blasint incx)
+                , (double*)$(openblas_complex_double* pa)
+                , &$(blasint lda)
+                )
+              }
+            |]
+        ConjTrans ->
+          with (conjugate alpha) $ \palpha ->
+          unsafeWithV (V.map conjugate y) $ \_ py incy ->
+            [C.block|
+              void {
+                BLASFUNC(zgerc)
+                ( &$(blasint nr)
+                , &$(blasint nc)
+                , (double*)$(openblas_complex_double* palpha)
+                , (double*)$(openblas_complex_double* py)
+                , &$(blasint incy)
+                , (double*)$(openblas_complex_double* px)
+                , &$(blasint incx)
+                , (double*)$(openblas_complex_double* pa)
+                , &$(blasint lda)
+                )
+              }
+            |]
+
+  gerc alpha x y a =
+    unsafePrimToPrim $
+    unsafeWithV x $ \_ px incx ->
+    withGE a $ \trans nr nc pa lda ->
+      case trans of
+        NoTrans ->
+          with alpha $ \palpha ->
+          unsafeWithV y $ \_ py incy ->
+            [C.block|
+              void {
+                BLASFUNC(zgerc)
+                ( &$(blasint nr)
+                , &$(blasint nc)
+                , (double*)$(openblas_complex_double* palpha)
+                , (double*)$(openblas_complex_double* px)
+                , &$(blasint incx)
+                , (double*)$(openblas_complex_double* py)
+                , &$(blasint incy)
+                , (double*)$(openblas_complex_double* pa)
+                , &$(blasint lda)
+                )
+              }
+            |]
+        Trans ->
+          with alpha $ \palpha ->
+          unsafeWithV (V.map conjugate y) $ \_ py incy ->
+            [C.block|
+              void {
+                BLASFUNC(zgeru)
+                ( &$(blasint nr)
+                , &$(blasint nc)
+                , (double*)$(openblas_complex_double* palpha)
+                , (double*)$(openblas_complex_double* py)
+                , &$(blasint incy)
+                , (double*)$(openblas_complex_double* px)
+                , &$(blasint incx)
+                , (double*)$(openblas_complex_double* pa)
+                , &$(blasint lda)
+                )
+              }
+            |]
+        ConjTrans ->
+          with (conjugate alpha) $ \palpha ->
+          unsafeWithV y $ \_ py incy ->
+            [C.block|
+              void {
+                BLASFUNC(zgerc)
+                ( &$(blasint nr)
+                , &$(blasint nc)
+                , (double*)$(openblas_complex_double* palpha)
+                , (double*)$(openblas_complex_double* py)
+                , &$(blasint incy)
+                , (double*)$(openblas_complex_double* px)
+                , &$(blasint incx)
+                , (double*)$(openblas_complex_double* pa)
+                , &$(blasint lda)
+                )
+              }
+            |]
