@@ -167,10 +167,7 @@ class Storable a => Scalar a where
   -- | @y <- alpha A x + beta y@
   trmv
     :: PrimMonad m =>
-       a
-    -> TR n a
-    -> V k a
-    -> a
+       TR n a
     -> Mut (V k) (PrimState m) a
     -> m ()
 
@@ -587,6 +584,25 @@ instance Scalar Double where
           , $diag:diag
           , &$(blasint nn)
           , $(double* pa)
+          , $(double* px)
+          , &$(blasint incx)
+          )
+        }
+      |]
+
+  trmv a x =
+    unsafePrimToPrim $
+    unsafeWithTR a $ \uplo trans diag nn pa lda ->
+    withV x $ \_ px incx ->
+      [C.block|
+        void {
+          BLASFUN(dtrmv)
+          ( $uplo:uplo
+          , $trans:trans
+          , $diag:diag
+          , &$(blasint nn)
+          , $(double* pa)
+          , &$(blasint lda)
           , $(double* px)
           , &$(blasint incx)
           )
@@ -1014,6 +1030,25 @@ instance Scalar (Complex Double) where
           , $diag:diag
           , &$(blasint nn)
           , (double*)$(openblas_complex_double* pa)
+          , (double*)$(openblas_complex_double* px)
+          , &$(blasint incx)
+          )
+        }
+      |]
+
+  trmv a x =
+    unsafePrimToPrim $
+    unsafeWithTR a $ \uplo trans diag nn pa lda ->
+    withV x $ \_ px incx ->
+      [C.block|
+        void {
+          BLASFUN(ztrmv)
+          ( $uplo:uplo
+          , $trans:trans
+          , $diag:diag
+          , &$(blasint nn)
+          , (double*)$(openblas_complex_double* pa)
+          , &$(blasint lda)
           , (double*)$(openblas_complex_double* px)
           , &$(blasint incx)
           )
