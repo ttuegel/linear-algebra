@@ -708,6 +708,45 @@ instance Scalar Double where
 
   gerc = geru
 
+  her alpha x a =
+    unsafePrimToPrim $
+    unsafeWithV x $ \_ px incx ->
+    withHE a $ \uplo nn pa lda ->
+      [C.block|
+        void {
+          BLASFUN(dsyr)
+          ( $uplo:uplo
+          , &$(blasint nn)
+          , $(double alpha)
+          , $(double* px)
+          , &$(blasint incx)
+          , $(double* pa)
+          , &$(blasint lda)
+          )
+        }
+      |]
+
+  her2 alpha x y a =
+    unsafePrimToPrim $
+    unsafeWithV x $ \_ px incx ->
+    unsafeWithV y $ \_ py incy ->
+    withHE a $ \uplo nn pa lda ->
+      [C.block|
+        void {
+          BLASFUN(dsyr2)
+          ( $uplo:uplo
+          , &$(blasint nn)
+          , $(double alpha)
+          , $(double* px)
+          , &$(blasint incx)
+          , $(double* py)
+          , &$(blasint incy)
+          , $(double* pa)
+          , &$(blasint lda)
+          )
+        }
+      |]
+
 instance Scalar (Complex Double) where
   type RealPart (Complex Double) = Double
 
@@ -1330,3 +1369,43 @@ instance Scalar (Complex Double) where
                 )
               }
             |]
+
+  her alpha x a =
+    unsafePrimToPrim $
+    unsafeWithV x $ \_ px incx ->
+    withHE a $ \uplo nn pa lda ->
+      [C.block|
+        void {
+          BLASFUN(zher)
+          ( $uplo:uplo
+          , &$(blasint nn)
+          , $(double alpha)
+          , (double*)$(openblas_complex_double* px)
+          , &$(blasint incx)
+          , (double*)$(openblas_complex_double* pa)
+          , &$(blasint lda)
+          )
+        }
+      |]
+
+  her2 alpha x y a =
+    unsafePrimToPrim $
+    with alpha $ \palpha ->
+    unsafeWithV x $ \_ px incx ->
+    unsafeWithV y $ \_ py incy ->
+    withHE a $ \uplo nn pa lda ->
+      [C.block|
+        void {
+          BLASFUN(zher2)
+          ( $uplo:uplo
+          , &$(blasint nn)
+          , (double*)$(openblas_complex_double* palpha)
+          , (double*)$(openblas_complex_double* px)
+          , &$(blasint incx)
+          , (double*)$(openblas_complex_double* py)
+          , &$(blasint incy)
+          , (double*)$(openblas_complex_double* pa)
+          , &$(blasint lda)
+          )
+        }
+      |]
