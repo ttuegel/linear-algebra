@@ -4,14 +4,13 @@
 module Language.C.Inline.Context.Blas where
 
 import Data.Complex
-import Foreign.C.Types (CInt)
+import Foreign.Ptr (Ptr)
 import Language.C.Inline.Context
        ( AntiQuoter(..), Context(..), SomeAntiQuoter(..) )
 import Language.C.Inline.HaskellIdentifier
 import Language.Haskell.TH (Q, Exp)
 
 import qualified Data.Map as Map
-import qualified Language.C.Inline as C
 import qualified Language.C.Types as C
 import qualified Language.Haskell.TH as TH
 
@@ -26,9 +25,6 @@ blasCtx =
       [ (C.TypeName "blasint", [t| I |])
       , (C.Double, [t| Double |])
       , (C.TypeName "openblas_complex_double", [t| Complex Double |])
-      , (C.TypeName "CBLAS_UPLO", [t| CInt |])
-      , (C.TypeName "CBLAS_DIAG", [t| CInt |])
-      , (C.TypeName "CBLAS_TRANSPOSE", [t| CInt |])
       ]
   , ctxAntiQuoters =
       Map.fromList
@@ -45,20 +41,20 @@ aqUpLo =
       hsId <- C.parseIdentifier
       let
         cId = mangleHaskellIdentifier hsId
-        cTy = C.TypeSpecifier mempty (C.TypeName "CBLAS_UPLO")
+        cTy = C.Ptr [] (C.TypeSpecifier mempty (C.Char Nothing))
       pure (cId, cTy, hsId)
   , aqMarshaller = \_purity _cTypes cTy cId -> do
       case cTy of
-        C.TypeSpecifier _ (C.TypeName "CBLAS_UPLO") -> do
+        C.Ptr _ (C.TypeSpecifier _ (C.Char _)) -> do
           hsExp <-
             [| \cont ->
                  case $(getHsVariable "blasCtx.uplo" cId) of
-                   Upper -> cont [C.pure| int { CblasUpper } |]
-                   Lower -> cont [C.pure| int { CblasLower } |]
+                   Upper -> with 'U' cont
+                   Lower -> with 'L' cont
              |]
-          hsTy <- [t| CInt |]
+          hsTy <- [t| Ptr Char |]
           return (hsTy, hsExp)
-        _ -> fail "blasCtx.uplo: got type different from `CBLAS_UPLO'"
+        _ -> fail "blasCtx.uplo: got type different from `char *'"
   }
 
 aqDiag :: AntiQuoter HaskellIdentifier
@@ -68,20 +64,20 @@ aqDiag =
       hsId <- C.parseIdentifier
       let
         cId = mangleHaskellIdentifier hsId
-        cTy = C.TypeSpecifier mempty (C.TypeName "CBLAS_DIAG")
+        cTy = C.Ptr [] (C.TypeSpecifier mempty (C.Char Nothing))
       pure (cId, cTy, hsId)
   , aqMarshaller = \_purity _cTypes cTy cId -> do
       case cTy of
-        C.TypeSpecifier _ (C.TypeName "CBLAS_DIAG") -> do
+        C.Ptr _ (C.TypeSpecifier _ (C.Char _)) -> do
           hsExp <-
             [| \cont ->
                  case $(getHsVariable "blasCtx.diag" cId) of
-                   Unit -> cont [C.pure| int { CblasUnit } |]
-                   NonUnit -> cont [C.pure| int { CblasNonUnit } |]
+                   Unit -> with 'U' cont
+                   NonUnit -> with 'N' cont
              |]
-          hsTy <- [t| CInt |]
+          hsTy <- [t| Ptr Char |]
           return (hsTy, hsExp)
-        _ -> fail "blasCtx.diag: got type different from `CBLAS_DIAG'"
+        _ -> fail "blasCtx.diag: got type different from `char *'"
   }
 
 aqTrans :: AntiQuoter HaskellIdentifier
@@ -91,22 +87,21 @@ aqTrans =
       hsId <- C.parseIdentifier
       let
         cId = mangleHaskellIdentifier hsId
-        cTy = C.TypeSpecifier mempty (C.TypeName "CBLAS_TRANSPOSE")
+        cTy = C.Ptr [] (C.TypeSpecifier mempty (C.Char Nothing))
       pure (cId, cTy, hsId)
-  , aqMarshaller = \_purity _cTypes cTy cId -> do
+  , aqMarshaller = \_ _ cTy cId -> do
       case cTy of
-        C.TypeSpecifier _ (C.TypeName "CBLAS_TRANSPOSE") -> do
+        C.Ptr _ (C.TypeSpecifier _ (C.Char _)) -> do
           hsExp <-
             [| \cont ->
                  case $(getHsVariable "blasCtx.trans" cId) of
-                   NoTrans -> cont [C.pure| int { CblasNoTrans } |]
-                   Trans -> cont [C.pure| int { CblasTrans } |]
-                   ConjTrans -> cont [C.pure| int { CblasConjTrans } |]
-                   ConjNoTrans -> cont [C.pure| int { CblasConjNoTrans } |]
+                   NoTrans -> with 'N' cont
+                   Trans -> with 'T' cont
+                   ConjTrans -> with 'C' cont
              |]
-          hsTy <- [t| CInt |]
+          hsTy <- [t| Ptr Char |]
           return (hsTy, hsExp)
-        _ -> fail "blasCtx.diag: got type different from `CBLAS_DIAG'"
+        _ -> fail "blasCtx.trans: got type different from `char *'"
   }
 
 getHsVariable :: String -> HaskellIdentifier -> Q Exp
