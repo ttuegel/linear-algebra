@@ -41,6 +41,7 @@ class Build a where
   dimGB :: E a -> WriterT (Acc a) Q (D a, D a)
   dimHE :: E a -> WriterT (Acc a) Q (D a)
   dimHB :: E a -> WriterT (Acc a) Q (D a)
+  dimHP :: E a -> WriterT (Acc a) Q (D a)
   vec :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
   mutVec :: E a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
   scalar :: E a -> Q Type -> WriterT (Acc a) Q ()
@@ -50,6 +51,7 @@ class Build a where
   matHE :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
   matMutHE :: E a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
   matHB :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matHP :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
 
 tellC :: (Type -> Q Type) -> WriterT (Acc (C Type)) Q ()
 tellC = tell . AccC . Dual . Endo
@@ -85,6 +87,8 @@ instance Build (C Type) where
 
   dimHB _ = tellC $ \r -> [t| I -> I -> I -> $(pure r) |]
 
+  dimHP _ = tellC $ \r -> [t| I -> I -> $(pure r) |]
+
   vec _ () a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
   mutVec e _ = vec e
 
@@ -104,6 +108,8 @@ instance Build (C Type) where
   matMutHE e _ = matHE e
 
   matHB _ _ a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
+
+  matHP _ _ a = tellC $ \r -> [t| Ptr $a -> $(pure r) |]
 
 tellHsType :: (Type -> Q Type) -> WriterT (Acc (Hs Type)) Q ()
 tellHsType = tell . AccHsType . Dual . Endo
@@ -150,15 +156,7 @@ instance Build (Hs Type) where
     tellHsType $ \r -> forallT tvars ctx (pure r)
     lift $ (,) <$> varT j <*> varT k
 
-  dimGB _ = do
-    j <- lift $ newName "j"
-    k <- lift $ newName "k"
-    dimk <- lift [t| Dim |]
-    let
-      tvars = [ KindedTV j dimk, KindedTV k dimk ]
-      ctx = pure []
-    tellHsType $ \r -> forallT tvars ctx (pure r)
-    lift $ (,) <$> varT j <*> varT k
+  dimGB = dimGE
 
   dimHE _ = do
     n <- lift $ newName "n"
@@ -169,14 +167,9 @@ instance Build (Hs Type) where
     tellHsType $ \r -> forallT tvars ctx (pure r)
     lift (varT n)
 
-  dimHB _ = do
-    n <- lift $ newName "n"
-    dimk <- lift [t| Dim |]
-    let
-      tvars = [ KindedTV n dimk ]
-      ctx = pure []
-    tellHsType $ \r -> forallT tvars ctx (pure r)
-    lift (varT n)
+  dimHB = dimHE
+
+  dimHP = dimHE
 
   vec _ n a = tellHsType $ \r -> [t| V $(pure n) $a -> $(pure r) |]
 
@@ -202,6 +195,8 @@ instance Build (Hs Type) where
     [t| Mut (HE $(pure n)) (PrimState $(pure m)) $a -> $(pure r) |]
 
   matHB _ n a = tellHsType $ \r -> [t| HB $(pure n) $a -> $(pure r) |]
+
+  matHP _ n a = tellHsType $ \r -> [t| HP $(pure n) $a -> $(pure r) |]
 
 instance Build Exp where
   data Acc Exp
@@ -299,6 +294,17 @@ instance Build Exp where
             [| unsafeWithHB $(pure v) $(lamE binds (pure r)) |]
       }
 
+  dimHP v = do
+    uplo <- lift $ newName "uplo"
+    nn <- lift $ newName "nn"
+    tell mempty
+      { getCall = Endo $ \call ->
+          [| $(pure call) (uploToI $(varE uplo)) $(varE nn) |]
+      , getBody = (Dual . Endo) $ \r ->
+          let binds = [varP uplo, varP nn, wildP] in
+            [| unsafeWithHP $(pure v) $(lamE binds (pure r)) |]
+      }
+
   vec v _ _ = do
     p <- lift $ newName "p"
     i <- lift $ newName "i"
@@ -384,6 +390,15 @@ instance Build Exp where
           , getBody = (Dual . Endo) $ \r ->
               let binds = [wildP, wildP, wildP, varP p, varP ld] in
                 [| unsafeWithHB $(pure hb) $(lamE binds (pure r)) |]
+          }
+
+  matHP hp _ _ = do
+    p <- lift (newName "p")
+    tell mempty
+          { getCall = Endo $ \call -> [| $(pure call) $(varE p) |]
+          , getBody = (Dual . Endo) $ \r ->
+              let binds = [wildP, wildP, varP p] in
+                [| unsafeWithHP $(pure hp) $(lamE binds (pure r)) |]
           }
 
 instance Semigroup (Acc Exp) where
@@ -594,6 +609,22 @@ hbmv t m = do
   mutVec y m n t
   unitT
 
+hpmv :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
+hpmv t m = do
+  alpha <- bind "alpha"
+  a <- bind "a"
+  x <- bind "x"
+  beta <- bind "beta"
+  y <- bind "y"
+  order
+  n <- dimHP a
+  scalar alpha t
+  matHP a n t
+  vec x n t
+  scalar beta t
+  mutVec y m n t
+  unitT
+
 cblas_dot :: Q Type -> String -> Q [Dec]
 cblas_dot t = cblas (dot t)
 
@@ -632,3 +663,6 @@ cblas_her2 t = cblas (her2 t)
 
 cblas_hbmv :: Q Type -> String -> Q [Dec]
 cblas_hbmv t = cblas (hbmv t)
+
+cblas_hpmv :: Q Type -> String -> Q [Dec]
+cblas_hpmv t = cblas (hpmv t)
