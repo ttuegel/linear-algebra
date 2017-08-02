@@ -71,6 +71,11 @@ cblas_ger [t| Complex Float |] "cgerc"
 cblas_ger [t| Complex Double |] "zgeru"
 cblas_ger [t| Complex Double |] "zgerc"
 
+cblas_gbmv [t| Float |] "sgbmv"
+cblas_gbmv [t| Double |] "dgbmv"
+cblas_gbmv [t| Complex Float |] "cgbmv"
+cblas_gbmv [t| Complex Double |] "zgbmv"
+
 class Storable a => Scalar a where
   type RealPart a
 
@@ -290,6 +295,7 @@ instance Scalar Float where
   gemv = sgemv
   geru = sger
   gerc = sger
+  gbmv = sgbmv
 
 instance Scalar Double where
   type RealPart Double = Double
@@ -306,6 +312,7 @@ instance Scalar Double where
   gemv = dgemv
   geru = dger
   gerc = dger
+  gbmv = dgbmv
 
 instance Scalar (Complex Float) where
   type RealPart (Complex Float) = Float
@@ -322,6 +329,7 @@ instance Scalar (Complex Float) where
   gemv = cgemv
   geru = cgeru
   gerc = cgerc
+  gbmv = cgbmv
 
 instance Scalar (Complex Double) where
   type RealPart (Complex Double) = Double
@@ -338,6 +346,7 @@ instance Scalar (Complex Double) where
   gemv = zgemv
   geru = zgeru
   gerc = zgerc
+  gbmv = zgbmv
 
 {-
 instance Scalar Double where

@@ -38,11 +38,13 @@ class Build a where
   dimVec :: E a -> WriterT (Acc a) Q (D a)
   dimMutVec :: E a -> WriterT (Acc a) Q (D a)
   dimGE :: E a -> WriterT (Acc a) Q (D a, D a)
+  dimGB :: E a -> WriterT (Acc a) Q (D a, D a)
   vec :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
   mutVec :: E a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
   scalar :: E a -> Q Type -> WriterT (Acc a) Q ()
   matGE :: E a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
   matMutGE :: E a -> M a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matGB :: E a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
 
 tellC :: (Type -> Q Type) -> WriterT (Acc (C Type)) Q ()
 tellC = tell . AccC . Dual . Endo
@@ -65,8 +67,13 @@ instance Build (C Type) where
 
   dimVec _ = tellC $ \r -> [t| I -> $(pure r) |]
   dimMutVec = dimVec
+
   dimGE _ = do
     tellC $ \r -> [t| I -> I -> I -> $(pure r) |]
+    pure ((), ())
+
+  dimGB _ = do
+    tellC $ \r -> [t| I -> I -> I -> I -> I -> $(pure r) |]
     pure ((), ())
 
   vec _ () a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
@@ -80,6 +87,8 @@ instance Build (C Type) where
   matGE _ _ _ a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
 
   matMutGE e _ = matGE e
+
+  matGB _ _ _ a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
 
 tellHsType :: (Type -> Q Type) -> WriterT (Acc (Hs Type)) Q ()
 tellHsType = tell . AccHsType . Dual . Endo
@@ -111,12 +120,22 @@ instance Build (Hs Type) where
     let
       tvars = [ KindedTV n dimk ]
       ctx = pure []
-    (tell . AccHsType . Dual . Endo) $ \r -> forallT tvars ctx (pure r)
+    tellHsType $ \r -> forallT tvars ctx (pure r)
     lift (varT n)
 
   dimMutVec = dimVec
 
   dimGE _ = do
+    j <- lift $ newName "j"
+    k <- lift $ newName "k"
+    dimk <- lift [t| Dim |]
+    let
+      tvars = [ KindedTV j dimk, KindedTV k dimk ]
+      ctx = pure []
+    tellHsType $ \r -> forallT tvars ctx (pure r)
+    lift $ (,) <$> varT j <*> varT k
+
+  dimGB _ = do
     j <- lift $ newName "j"
     k <- lift $ newName "k"
     dimk <- lift [t| Dim |]
@@ -140,6 +159,9 @@ instance Build (Hs Type) where
   matMutGE _ m j k a =
     tellHsType $ \r ->
       [t| Mut (GE $(pure j) $(pure k)) (PrimState $(pure m)) $a -> $(pure r) |]
+
+  matGB _ j k a =
+    tellHsType $ \r -> [t| GB $(pure j) $(pure k) $a -> $(pure r) |]
 
 instance Build Exp where
   data Acc Exp
@@ -197,6 +219,23 @@ instance Build Exp where
       }
     pure ((), ())
 
+  dimGB m = do
+    t <- lift (newName "t")
+    r <- lift (newName "r")
+    c <- lift (newName "c")
+    kl <- lift (newName "kl")
+    ku <- lift (newName "ku")
+    tell mempty
+      { getCall = Endo $ \call ->
+          [| $(pure call)
+             (transToI $(varE t)) $(varE r) $(varE c)
+             $(varE kl) $(varE ku) |]
+      , getBody = (Dual . Endo) $ \rest ->
+          let binds = [varP t, varP r, varP c, varP kl, varP ku, wildP, wildP] in
+            [| unsafeWithGB $(pure m) $(lamE binds (pure rest)) |]
+      }
+    pure ((), ())
+
   vec v _ _ = do
     p <- lift $ newName "p"
     i <- lift $ newName "i"
@@ -224,13 +263,13 @@ instance Build Exp where
           [| $(withE =<< a) $(pure s) $(lam1E (varP z) (pure r)) |]
       }
 
-  matGE ge _ _ _ = do
+  matGE gb _ _ _ = do
     p <- lift (newName "p")
     ld <- lift (newName "ld")
     tell mempty
           { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
           , getBody = (Dual . Endo) $ \r ->
-              [| unsafeWithGE $(pure ge)
+              [| unsafeWithGB $(pure gb)
                  $(lamE [wildP, wildP, wildP, varP p, varP ld] (pure r)) |]
           }
 
@@ -242,6 +281,16 @@ instance Build Exp where
           , getBody = (Dual . Endo) $ \r ->
               let binds = [wildP, wildP, wildP, varP p, varP ld] in
                 [| withGE $(pure ge) $(lamE binds (pure r)) |]
+          }
+
+  matGB gb _ _ _ = do
+    p <- lift (newName "p")
+    ld <- lift (newName "ld")
+    tell mempty
+          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
+          , getBody = (Dual . Endo) $ \r ->
+              let binds = [wildP, wildP, wildP, wildP, wildP, varP p, varP ld] in
+                [| unsafeWithGB $(pure gb) $(lamE binds (pure r)) |]
           }
 
 instance Semigroup (Acc Exp) where
@@ -378,6 +427,22 @@ ger t m = do
   matMutGE a m j k t
   unitT
 
+gbmv :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
+gbmv t m = do
+  alpha <- bind "alpha"
+  a <- bind "a"
+  x <- bind "x"
+  beta <- bind "beta"
+  y <- bind "y"
+  order
+  (r, c) <- dimGB a
+  scalar alpha t
+  matGB a r c t
+  vec x c t
+  scalar beta t
+  mutVec y m r t
+  unitT
+
 cblas_dot :: Q Type -> String -> Q [Dec]
 cblas_dot t = cblas (dot t)
 
@@ -401,3 +466,6 @@ cblas_gemv t = cblas (gemv t)
 
 cblas_ger :: Q Type -> String -> Q [Dec]
 cblas_ger t = cblas (ger t)
+
+cblas_gbmv :: Q Type -> String -> Q [Dec]
+cblas_gbmv t = cblas (gbmv t)
