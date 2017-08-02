@@ -35,9 +35,9 @@ class Build a where
   bind :: String -> WriterT (Acc a) Q (E a)
   dim :: E a -> WriterT (Acc a) Q (D a)
   mutdim :: E a -> WriterT (Acc a) Q (D a)
-  vec :: E a -> D a -> Type -> WriterT (Acc a) Q ()
-  mutvec :: E a -> M a -> D a -> Type -> WriterT (Acc a) Q ()
-  scalar :: E a -> Type -> WriterT (Acc a) Q ()
+  vec :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  mutvec :: E a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  scalar :: E a -> Q Type -> WriterT (Acc a) Q ()
 
 instance Build (C Type) where
   newtype Acc (C Type) = AccC { getType :: Dual (Endo Q Type) }
@@ -57,15 +57,15 @@ instance Build (C Type) where
   mutdim = dim
 
   vec _ () a =
-    (tell . AccC . Dual . Endo) $ \r -> [t| Ptr $(pure a) -> I -> $(pure r) |]
+    (tell . AccC . Dual . Endo) $ \r -> [t| Ptr $a -> I -> $(pure r) |]
   mutvec e _ = vec e
 
-  scalar _ a = calling a byValue byRef
+  scalar _ _a = lift _a >>= \_a -> calling _a byValue byRef
     where
       byValue =
-        (tell . AccC . Dual . Endo) $ \r -> [t| $(pure a) -> $(pure r) |]
+        (tell . AccC . Dual . Endo) $ \r -> [t| $_a -> $(pure r) |]
       byRef =
-        (tell . AccC . Dual . Endo) $ \r -> [t| Ptr $(pure a) -> $(pure r) |]
+        (tell . AccC . Dual . Endo) $ \r -> [t| Ptr $_a -> $(pure r) |]
 
 instance Build (Hs Type) where
   newtype Acc (Hs Type) = AccHsType { getHsType :: Dual (Endo Q Type) }
@@ -100,14 +100,14 @@ instance Build (Hs Type) where
 
   vec _ n a =
     (tell . AccHsType . Dual . Endo) $ \r ->
-      [t| V $(pure n) $(pure a) -> $(pure r) |]
+      [t| V $(pure n) $a -> $(pure r) |]
 
   mutvec _ m n a =
     (tell . AccHsType . Dual . Endo) $ \r ->
-      [t| Mut (V $(pure n)) (PrimState $(pure m)) $(pure a) -> $(pure r) |]
+      [t| Mut (V $(pure n)) (PrimState $(pure m)) $a -> $(pure r) |]
 
   scalar _ a =
-    (tell . AccHsType . Dual . Endo) $ \r -> [t| $(pure a) -> $(pure r) |]
+    (tell . AccHsType . Dual . Endo) $ \r -> [t| $a -> $(pure r) |]
 
 instance Build Exp where
   data Acc Exp
@@ -174,7 +174,7 @@ instance Build Exp where
     tell mempty
       { getCall = Endo $ \call -> [| $(pure call) $(varE z) |]
       , getBody = (Dual . Endo) $ \r ->
-          [| $(withE a) $(pure s) $(lam1E (varP z) (pure r)) |]
+          [| $(withE =<< a) $(pure s) $(lam1E (varP z) (pure r)) |]
       }
 
 instance Semigroup (Acc Exp) where
@@ -207,44 +207,44 @@ cblas sig fnam = do
   hdec <- valD (varP hnam) (normalB $ pure body) []
   pure [cdec, hsig, hdec]
 
-dot :: Build a => Type -> M a -> WriterT (Acc a) Q Type
+dot :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
 dot t _ = do
   x <- bind "x"
   y <- bind "y"
   n <- dim x
   vec x n t
   vec y n t
-  return t
+  lift t
 
-asum :: Build a => Type -> Type -> M a -> WriterT (Acc a) Q Type
+asum :: Build a => Q Type -> Q Type -> M a -> WriterT (Acc a) Q Type
 asum r t _ = do
   x <- bind "x"
   n <- dim x
   vec x n t
-  return r
+  lift r
 
-unitT :: Type
-unitT = TupleT 0
+unitT :: WriterT s Q Type
+unitT = lift (tupleT 0)
 
-swap :: Build a => Type -> M a -> WriterT (Acc a) Q Type
+swap :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
 swap t m = do
   x <- bind "x"
   y <- bind "y"
   n <- mutdim x
   mutvec x m n t
   mutvec y m n t
-  return unitT
+  unitT
 
-copy :: Build a => Type -> M a -> WriterT (Acc a) Q Type
+copy :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
 copy t m = do
   x <- bind "x"
   y <- bind "y"
   n <- dim x
   vec x n t
   mutvec y m n t
-  return unitT
+  unitT
 
-axpy :: Build a => Type -> M a -> WriterT (Acc a) Q Type
+axpy :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
 axpy t m = do
   alpha <- bind "alpha"
   x <- bind "x"
@@ -253,16 +253,16 @@ axpy t m = do
   scalar alpha t
   vec x n t
   mutvec y m n t
-  return unitT
+  unitT
 
-scal :: Build a => Type -> Type -> M a -> WriterT (Acc a) Q Type
+scal :: Build a => Q Type -> Q Type -> M a -> WriterT (Acc a) Q Type
 scal a t m = do
   alpha <- bind "alpha"
   x <- bind "x"
   n <- mutdim x
   scalar alpha a
   mutvec x m n t
-  return unitT
+  unitT
 
 withE :: Type -> Q Exp
 withE a = calling a [| flip ($) |] [| with |]
@@ -281,33 +281,19 @@ calling t byVal byRef = do
     _ -> byVal
 
 cblas_dot :: Q Type -> String -> Q [Dec]
-cblas_dot _t fnam = do
-  _t <- _t
-  cblas (dot _t) fnam
+cblas_dot t = cblas (dot t)
 
 cblas_asum :: Q Type -> Q Type -> String -> Q [Dec]
-cblas_asum _r _t fnam = do
-  _r <- _r
-  _t <- _t
-  cblas (asum _r _t) fnam
+cblas_asum r t = cblas (asum r t)
 
 cblas_swap :: Q Type -> String -> Q [Dec]
-cblas_swap _t fnam = do
-  _t <- _t
-  cblas (swap _t) fnam
+cblas_swap t = cblas (swap t)
 
 cblas_copy :: Q Type -> String -> Q [Dec]
-cblas_copy _t fnam = do
-  _t <- _t
-  cblas (copy _t) fnam
+cblas_copy t = cblas (copy t)
 
 cblas_axpy :: Q Type -> String -> Q [Dec]
-cblas_axpy _t fnam = do
-  _t <- _t
-  cblas (axpy _t) fnam
+cblas_axpy t = cblas (axpy t)
 
 cblas_scal :: Q Type -> Q Type -> String -> Q [Dec]
-cblas_scal _s _t fnam = do
-  _s <- _s
-  _t <- _t
-  cblas (scal _s _t) fnam
+cblas_scal s t = cblas (scal s t)
