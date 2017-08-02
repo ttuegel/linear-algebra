@@ -10,9 +10,41 @@ import Internal.Mut
 
 data UpLo = Upper | Lower
 
-data Diag = Unit | NonUnit
+instance Enum UpLo where
+  fromEnum Upper = 121
+  fromEnum Lower = 122
+  toEnum 121 = Upper
+  toEnum 122 = Lower
+  toEnum x = error ("CblasUpLo: illegal value `" ++ show x ++ "'")
+
+uploToI :: UpLo -> I
+uploToI = fromIntegral . fromEnum
+
+data Diag = NonUnit | Unit
+
+instance Enum Diag where
+  fromEnum NonUnit = 131
+  fromEnum Unit = 132
+  toEnum 131 = NonUnit
+  toEnum 132 = Unit
+  toEnum x = error ("CblasDiag: illegal value `" ++ show x ++ "'")
+
+diagToI :: Diag -> I
+diagToI = fromIntegral . fromEnum
 
 data Trans = NoTrans | Trans | ConjTrans
+
+instance Enum Trans where
+  fromEnum NoTrans = 111
+  fromEnum Trans = 112
+  fromEnum ConjTrans = 113
+  toEnum 111 = NoTrans
+  toEnum 112 = Trans
+  toEnum 113 = ConjTrans
+  toEnum x = error ("CblasTranspose: illegal value `" ++ show x ++ "'")
+
+transToI :: Trans -> I
+transToI = fromIntegral . fromEnum
 
 data GE (m :: Dim) (n :: Dim) a
   = GE !Trans

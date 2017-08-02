@@ -59,6 +59,18 @@ cblas_scal [t| Complex Double |] [t| Complex Double |] "zscal"
 cblas_scal [t| Float |] [t| Complex Float |] "csscal"
 cblas_scal [t| Double |] [t| Complex Double |] "zdscal"
 
+cblas_gemv [t| Float |] "sgemv"
+cblas_gemv [t| Double |] "dgemv"
+cblas_gemv [t| Complex Float |] "cgemv"
+cblas_gemv [t| Complex Double |] "zgemv"
+
+cblas_ger [t| Float |] "sger"
+cblas_ger [t| Double |] "dger"
+cblas_ger [t| Complex Float |] "cgeru"
+cblas_ger [t| Complex Float |] "cgerc"
+cblas_ger [t| Complex Double |] "zgeru"
+cblas_ger [t| Complex Double |] "zgerc"
+
 class Storable a => Scalar a where
   type RealPart a
 
@@ -275,6 +287,9 @@ instance Scalar Float where
   rscal = sscal
   copy = scopy
   swap = sswap
+  gemv = sgemv
+  geru = sger
+  gerc = sger
 
 instance Scalar Double where
   type RealPart Double = Double
@@ -288,6 +303,9 @@ instance Scalar Double where
   rscal = dscal
   copy = dcopy
   swap = dswap
+  gemv = dgemv
+  geru = dger
+  gerc = dger
 
 instance Scalar (Complex Float) where
   type RealPart (Complex Float) = Float
@@ -301,6 +319,9 @@ instance Scalar (Complex Float) where
   rscal = csscal
   copy = ccopy
   swap = cswap
+  gemv = cgemv
+  geru = cgeru
+  gerc = cgerc
 
 instance Scalar (Complex Double) where
   type RealPart (Complex Double) = Double
@@ -314,6 +335,9 @@ instance Scalar (Complex Double) where
   rscal = zdscal
   copy = zcopy
   swap = zswap
+  gemv = zgemv
+  geru = zgeru
+  gerc = zgerc
 
 {-
 instance Scalar Double where

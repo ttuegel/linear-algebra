@@ -15,6 +15,7 @@ import Language.Haskell.TH
 import Data.Dim
 import Internal.Endo
 import Internal.Int (I)
+import Internal.Matrix
 import Internal.Mut
 import Internal.Vector
 import Internal.Writer
@@ -33,11 +34,18 @@ class Build a where
   type E a
   build :: Monoid (Acc a) => E a -> (M a -> WriterT (Acc a) Q Type) -> Q a
   bind :: String -> WriterT (Acc a) Q (E a)
-  dim :: E a -> WriterT (Acc a) Q (D a)
-  mutdim :: E a -> WriterT (Acc a) Q (D a)
+  order :: WriterT (Acc a) Q ()
+  dimVec :: E a -> WriterT (Acc a) Q (D a)
+  dimMutVec :: E a -> WriterT (Acc a) Q (D a)
+  dimGE :: E a -> WriterT (Acc a) Q (D a, D a)
   vec :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  mutvec :: E a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  mutVec :: E a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
   scalar :: E a -> Q Type -> WriterT (Acc a) Q ()
+  matGE :: E a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matMutGE :: E a -> M a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
+
+tellC :: (Type -> Q Type) -> WriterT (Acc (C Type)) Q ()
+tellC = tell . AccC . Dual . Endo
 
 instance Build (C Type) where
   newtype Acc (C Type) = AccC { getType :: Dual (Endo Q Type) }
@@ -53,19 +61,28 @@ instance Build (C Type) where
 
   bind _ = pure ()
 
-  dim _ = (tell . AccC . Dual . Endo) $ \r -> [t| I -> $(pure r) |]
-  mutdim = dim
+  order = tellC $ \r -> [t| I -> $(pure r) |]
 
-  vec _ () a =
-    (tell . AccC . Dual . Endo) $ \r -> [t| Ptr $a -> I -> $(pure r) |]
-  mutvec e _ = vec e
+  dimVec _ = tellC $ \r -> [t| I -> $(pure r) |]
+  dimMutVec = dimVec
+  dimGE _ = do
+    tellC $ \r -> [t| I -> I -> I -> $(pure r) |]
+    pure ((), ())
+
+  vec _ () a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
+  mutVec e _ = vec e
 
   scalar _ _a = lift _a >>= \_a -> calling _a byValue byRef
     where
-      byValue =
-        (tell . AccC . Dual . Endo) $ \r -> [t| $_a -> $(pure r) |]
-      byRef =
-        (tell . AccC . Dual . Endo) $ \r -> [t| Ptr $_a -> $(pure r) |]
+      byValue = tellC $ \r -> [t| $_a -> $(pure r) |]
+      byRef = tellC $ \r -> [t| Ptr $_a -> $(pure r) |]
+
+  matGE _ _ _ a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
+
+  matMutGE e _ = matGE e
+
+tellHsType :: (Type -> Q Type) -> WriterT (Acc (Hs Type)) Q ()
+tellHsType = tell . AccHsType . Dual . Endo
 
 instance Build (Hs Type) where
   newtype Acc (Hs Type) = AccHsType { getHsType :: Dual (Endo Q Type) }
@@ -86,28 +103,43 @@ instance Build (Hs Type) where
 
   bind _ = pure ()
 
-  dim _ = do
+  order = pure ()
+
+  dimVec _ = do
     n <- lift $ newName "n"
-    nk <- lift [t| Dim |]
+    dimk <- lift [t| Dim |]
     let
-      tvars = [ KindedTV n nk ]
+      tvars = [ KindedTV n dimk ]
       ctx = pure []
-    tv <- lift $ varT n
     (tell . AccHsType . Dual . Endo) $ \r -> forallT tvars ctx (pure r)
-    pure tv
+    lift (varT n)
 
-  mutdim = dim
+  dimMutVec = dimVec
 
-  vec _ n a =
-    (tell . AccHsType . Dual . Endo) $ \r ->
-      [t| V $(pure n) $a -> $(pure r) |]
+  dimGE _ = do
+    j <- lift $ newName "j"
+    k <- lift $ newName "k"
+    dimk <- lift [t| Dim |]
+    let
+      tvars = [ KindedTV j dimk, KindedTV k dimk ]
+      ctx = pure []
+    tellHsType $ \r -> forallT tvars ctx (pure r)
+    lift $ (,) <$> varT j <*> varT k
 
-  mutvec _ m n a =
-    (tell . AccHsType . Dual . Endo) $ \r ->
+  vec _ n a = tellHsType $ \r -> [t| V $(pure n) $a -> $(pure r) |]
+
+  mutVec _ m n a =
+    tellHsType $ \r ->
       [t| Mut (V $(pure n)) (PrimState $(pure m)) $a -> $(pure r) |]
 
-  scalar _ a =
-    (tell . AccHsType . Dual . Endo) $ \r -> [t| $a -> $(pure r) |]
+  scalar _ a = tellHsType $ \r -> [t| $a -> $(pure r) |]
+
+  matGE _ j k a =
+    tellHsType $ \r -> [t| GE $(pure j) $(pure k) $a -> $(pure r) |]
+
+  matMutGE _ m j k a =
+    tellHsType $ \r ->
+      [t| Mut (GE $(pure j) $(pure k)) (PrimState $(pure m)) $a -> $(pure r) |]
 
 instance Build Exp where
   data Acc Exp
@@ -134,7 +166,9 @@ instance Build Exp where
     tell mempty { getBind = (Dual . Endo) $ lam1E (varP _nm) . pure }
     lift (varE _nm)
 
-  dim v = do
+  order = tell mempty { getCall = Endo $ \call -> [| $(pure call) 102 |] }
+
+  dimVec v = do
     nn <- lift $ newName "nn"
     tell mempty
       { getCall = Endo $ \call -> [| $(pure call) $(varE nn) |]
@@ -142,13 +176,26 @@ instance Build Exp where
           [| unsafeWithV $(pure v) $(lamE [varP nn, wildP, wildP] (pure r)) |]
       }
 
-  mutdim v = do
+  dimMutVec v = do
     nn <- lift $ newName "nn"
     tell mempty
       { getCall = Endo $ \call -> [| $(pure call) $(varE nn) |]
       , getBody = (Dual . Endo) $ \r ->
           [| withV $(pure v) $(lamE [varP nn, wildP, wildP] (pure r)) |]
       }
+
+  dimGE m = do
+    t <- lift (newName "t")
+    r <- lift (newName "r")
+    c <- lift (newName "c")
+    tell mempty
+      { getCall = Endo $ \call ->
+          [| $(pure call) (transToI $(varE t)) $(varE r) $(varE c) |]
+      , getBody = (Dual . Endo) $ \rest ->
+          [| unsafeWithGE $(pure m)
+             $(lamE [varP t, varP r, varP c, wildP, wildP] (pure rest)) |]
+      }
+    pure ((), ())
 
   vec v _ _ = do
     p <- lift $ newName "p"
@@ -160,7 +207,7 @@ instance Build Exp where
                  $(lamE [wildP, varP p, varP i] (pure r)) |]
           }
 
-  mutvec v _ _ _ = do
+  mutVec v _ _ _ = do
     p <- lift $ newName "p"
     i <- lift $ newName "i"
     tell mempty
@@ -177,6 +224,26 @@ instance Build Exp where
           [| $(withE =<< a) $(pure s) $(lam1E (varP z) (pure r)) |]
       }
 
+  matGE ge _ _ _ = do
+    p <- lift (newName "p")
+    ld <- lift (newName "ld")
+    tell mempty
+          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
+          , getBody = (Dual . Endo) $ \r ->
+              [| unsafeWithGE $(pure ge)
+                 $(lamE [wildP, wildP, wildP, varP p, varP ld] (pure r)) |]
+          }
+
+  matMutGE ge _ _ _ _ = do
+    p <- lift (newName "p")
+    ld <- lift (newName "ld")
+    tell mempty
+          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
+          , getBody = (Dual . Endo) $ \r ->
+              let binds = [wildP, wildP, wildP, varP p, varP ld] in
+                [| withGE $(pure ge) $(lamE binds (pure r)) |]
+          }
+
 instance Semigroup (Acc Exp) where
   (<>) a b =
     AccExp
@@ -188,6 +255,22 @@ instance Semigroup (Acc Exp) where
 instance Monoid (Acc Exp) where
   mempty = AccExp { getCall = mempty, getBody = mempty, getBind = mempty }
   mappend = (<>)
+
+withE :: Type -> Q Exp
+withE a = calling a [| flip ($) |] [| with |]
+
+allocaE :: Type -> Q Exp
+allocaE a = calling a [| flip ($) () |] [| alloca |]
+
+callE :: Type -> Q Exp
+callE a = calling a [| \r _ -> r |] [| \f z -> f z >> peek z |]
+
+calling :: Type -> a -> a -> a
+calling t byVal byRef = do
+  case t of
+    AppT (ConT complex) _
+      | complex == ''Complex -> byRef
+    _ -> byVal
 
 cblas_import :: String -> Q (C Type) -> Q (Exp, Dec)
 cblas_import fnam ctyp = do
@@ -211,7 +294,7 @@ dot :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
 dot t _ = do
   x <- bind "x"
   y <- bind "y"
-  n <- dim x
+  n <- dimVec x
   vec x n t
   vec y n t
   lift t
@@ -219,7 +302,7 @@ dot t _ = do
 asum :: Build a => Q Type -> Q Type -> M a -> WriterT (Acc a) Q Type
 asum r t _ = do
   x <- bind "x"
-  n <- dim x
+  n <- dimVec x
   vec x n t
   lift r
 
@@ -230,18 +313,18 @@ swap :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
 swap t m = do
   x <- bind "x"
   y <- bind "y"
-  n <- mutdim x
-  mutvec x m n t
-  mutvec y m n t
+  n <- dimMutVec x
+  mutVec x m n t
+  mutVec y m n t
   unitT
 
 copy :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
 copy t m = do
   x <- bind "x"
   y <- bind "y"
-  n <- dim x
+  n <- dimVec x
   vec x n t
-  mutvec y m n t
+  mutVec y m n t
   unitT
 
 axpy :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
@@ -249,36 +332,51 @@ axpy t m = do
   alpha <- bind "alpha"
   x <- bind "x"
   y <- bind "y"
-  n <- dim x
+  n <- dimVec x
   scalar alpha t
   vec x n t
-  mutvec y m n t
+  mutVec y m n t
   unitT
 
 scal :: Build a => Q Type -> Q Type -> M a -> WriterT (Acc a) Q Type
 scal a t m = do
   alpha <- bind "alpha"
   x <- bind "x"
-  n <- mutdim x
+  n <- dimMutVec x
   scalar alpha a
-  mutvec x m n t
+  mutVec x m n t
   unitT
 
-withE :: Type -> Q Exp
-withE a = calling a [| flip ($) |] [| with |]
+gemv :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
+gemv t m = do
+  alpha <- bind "alpha"
+  a <- bind "a"
+  x <- bind "x"
+  beta <- bind "beta"
+  y <- bind "y"
+  order
+  (r, c) <- dimGE a
+  scalar alpha t
+  matGE a r c t
+  vec x c t
+  scalar beta t
+  mutVec y m r t
+  unitT
 
-allocaE :: Type -> Q Exp
-allocaE a = calling a [| flip ($) () |] [| alloca |]
-
-callE :: Type -> Q Exp
-callE a = calling a [| \r _ -> r |] [| \f z -> f z >> peek z |]
-
-calling :: Type -> a -> a -> a
-calling t byVal byRef = do
-  case t of
-    AppT (ConT complex) _
-      | complex == ''Complex -> byRef
-    _ -> byVal
+ger :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
+ger t m = do
+  alpha <- bind "alpha"
+  x <- bind "x"
+  y <- bind "y"
+  a <- bind "a"
+  order
+  j <- dimVec x
+  k <- dimVec y
+  scalar alpha t
+  vec x j t
+  vec y k t
+  matMutGE a m j k t
+  unitT
 
 cblas_dot :: Q Type -> String -> Q [Dec]
 cblas_dot t = cblas (dot t)
@@ -297,3 +395,9 @@ cblas_axpy t = cblas (axpy t)
 
 cblas_scal :: Q Type -> Q Type -> String -> Q [Dec]
 cblas_scal s t = cblas (scal s t)
+
+cblas_gemv :: Q Type -> String -> Q [Dec]
+cblas_gemv t = cblas (gemv t)
+
+cblas_ger :: Q Type -> String -> Q [Dec]
+cblas_ger t = cblas (ger t)
