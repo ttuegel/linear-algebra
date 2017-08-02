@@ -10,7 +10,6 @@ import Foreign.Marshal.Alloc (alloca)
 import Foreign.Storable (Storable, peek)
 import Prelude hiding (length)
 
-import Internal.Int
 import Internal.Matrix
 import Internal.Mut
 import Internal.TH
@@ -131,6 +130,16 @@ cblas_tpmv [t| Double |] "dtpsv"
 cblas_tpmv [t| Complex Float |] "ctpsv"
 cblas_tpmv [t| Complex Double |] "ztpsv"
 
+cblas_tbmv [t| Float |] "stbmv"
+cblas_tbmv [t| Double |] "dtbmv"
+cblas_tbmv [t| Complex Float |] "ctbmv"
+cblas_tbmv [t| Complex Double |] "ztbmv"
+
+cblas_tbmv [t| Float |] "stbsv"
+cblas_tbmv [t| Double |] "dtbsv"
+cblas_tbmv [t| Complex Float |] "ctbsv"
+cblas_tbmv [t| Complex Double |] "ztbsv"
+
 class Storable a => Scalar a where
   type RealPart a
 
@@ -242,7 +251,7 @@ class Storable a => Scalar a where
   tbmv
     :: PrimMonad m =>
        TB n a
-    -> Mut (V k) (PrimState m) a
+    -> Mut (V n) (PrimState m) a
     -> m ()
 
   -- | @y <- alpha A x + beta y@
@@ -264,7 +273,7 @@ class Storable a => Scalar a where
   tbsv
     :: PrimMonad m =>
        TB n a
-    -> Mut (V k) (PrimState m) a
+    -> Mut (V n) (PrimState m) a
     -> m ()
 
   -- | Compute the solution of a system of linear equations,
@@ -362,6 +371,8 @@ instance Scalar Float where
   trsv = strsv
   tpmv = stpmv
   tpsv = stpsv
+  tbmv = stbmv
+  tbsv = stbsv
 
 instance Scalar Double where
   type RealPart Double = Double
@@ -390,6 +401,8 @@ instance Scalar Double where
   trsv = dtrsv
   tpmv = dtpmv
   tpsv = dtpsv
+  tbmv = dtbmv
+  tbsv = dtbsv
 
 instance Scalar (Complex Float) where
   type RealPart (Complex Float) = Float
@@ -418,6 +431,8 @@ instance Scalar (Complex Float) where
   trsv = ctrsv
   tpmv = ctpmv
   tpsv = ctpsv
+  tbmv = ctbmv
+  tbsv = ctbsv
 
 instance Scalar (Complex Double) where
   type RealPart (Complex Double) = Double
@@ -446,3 +461,5 @@ instance Scalar (Complex Double) where
   trsv = ztrsv
   tpmv = ztpmv
   tpsv = ztpsv
+  tbmv = ztbmv
+  tbsv = ztbsv
