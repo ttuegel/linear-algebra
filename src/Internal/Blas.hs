@@ -5,68 +5,83 @@ module Internal.Blas where
 
 import Control.Monad.Primitive
 import Data.Complex
-import Data.Monoid ((<>))
+import Foreign.C.Types (CSize(..))
 import Foreign.Marshal.Alloc (alloca)
-import Foreign.Marshal.Utils (with)
 import Foreign.Storable (Storable, peek)
-import Language.C.Inline.Context (baseCtx)
 import Prelude hiding (length)
-import System.IO.Unsafe (unsafePerformIO)
-
-import qualified Data.Vector.Generic as V
-import qualified Language.C.Inline as C
 
 import Internal.Int
 import Internal.Matrix
 import Internal.Mut
+import Internal.TH
 import Internal.Vector
-import Language.C.Inline.Context.Blas
 
-C.context (baseCtx <> blasCtx)
-C.include "<cblas.h>"
-C.include "<f77blas.h>"
+cblas_dot [t| Float |] "sdot"
+cblas_dot [t| Double |] "ddot"
+cblas_dot [t| Complex Float |] "cdot"
+cblas_dot [t| Complex Double |] "zdot"
 
+cblas_asum [t| Float |] [t| Float |] "snrm2"
+cblas_asum [t| Float |] [t| Float |] "sasum"
+cblas_asum [t| CSize |] [t| Float |] "isamax"
+
+cblas_asum [t| Double |] [t| Double |] "dnrm2"
+cblas_asum [t| Double |] [t| Double |] "dasum"
+cblas_asum [t| CSize |] [t| Double |] "idamax"
+
+cblas_asum [t| Float |] [t| Complex Float |] "scnrm2"
+cblas_asum [t| Float |] [t| Complex Float |] "scasum"
+cblas_asum [t| CSize |] [t| Complex Float |] "icamax"
+
+cblas_asum [t| Double |] [t| Complex Double |] "dznrm2"
+cblas_asum [t| Double |] [t| Complex Double |] "dzasum"
+cblas_asum [t| CSize |] [t| Complex Double |] "izamax"
+
+cblas_swap [t| Float |] "sswap"
+cblas_swap [t| Double |] "dswap"
+cblas_swap [t| Complex Float |] "cswap"
+cblas_swap [t| Complex Double |] "zswap"
+
+cblas_copy [t| Float |] "scopy"
+cblas_copy [t| Double |] "dcopy"
+cblas_copy [t| Complex Float |] "ccopy"
+cblas_copy [t| Complex Double |] "zcopy"
+
+cblas_axpy [t| Float |] "saxpy"
+cblas_axpy [t| Double |] "daxpy"
+cblas_axpy [t| Complex Float |] "caxpy"
+cblas_axpy [t| Complex Double |] "zaxpy"
+
+cblas_scal [t| Float |] [t| Float |] "sscal"
+cblas_scal [t| Double |] [t| Double |] "dscal"
+cblas_scal [t| Complex Float |] [t| Complex Float |] "cscal"
+cblas_scal [t| Complex Double |] [t| Complex Double |] "zscal"
+cblas_scal [t| Float |] [t| Complex Float |] "csscal"
+cblas_scal [t| Double |] [t| Complex Double |] "zdscal"
 
 class Storable a => Scalar a where
   type RealPart a
 
   -- | Unconjugated inner (dot) product, @x^T x@.
-  dotu :: V n a -> V n a -> a
+  dotu :: PrimMonad m => V n a -> V n a -> m a
 
   -- | Conjugated inner (dot) product, @x^H x@.
-  dotc :: V n a -> V n a -> a
+  dotc :: PrimMonad m => V n a -> V n a -> m a
 
   -- | The sum of the real modulus of each element of the vector,
   -- @sum . map magnitude@.
-  asum :: V n a -> RealPart a
+  asum :: PrimMonad m => V n a -> m (RealPart a)
 
   -- | The Euclidean norm of the vector,
   -- @sqrt . sum . map (\x -> realPart (conjugate x * x))@
-  nrm2 :: V n a -> RealPart a
+  nrm2 :: PrimMonad m => V n a -> m (RealPart a)
 
   -- | The index of the element of the vector with the largest real
   -- modulus.
-  iamax :: V n a -> I
-  amax :: V n a -> RealPart a
-
-  -- | The index of the element of the vector with the smallest real
-  -- modulus.
-  iamin :: V n a -> I
-  amin :: V n a -> RealPart a
-
-  max :: V n a -> RealPart a
-  min :: V n a -> RealPart a
+  iamax :: PrimMonad m => V n a -> m CSize
 
   -- | @y <- a x + y@
   axpy
-    :: PrimMonad m =>
-       a  -- ^ scalar @a@
-    -> V n a  -- ^ vector @x@
-    -> Mut (V n) (PrimState m) a  -- ^ vector @y@
-    -> m ()
-
-  -- | @y <- a conj(x) + y@
-  axpyc
     :: PrimMonad m =>
        a  -- ^ scalar @a@
     -> V n a  -- ^ vector @x@
@@ -247,198 +262,61 @@ class Storable a => Scalar a where
     -> V n a
     -> Mut (HP n) (PrimState m) a
     -> m ()
+
+instance Scalar Float where
+  type RealPart Float = Float
+  dotu = sdot
+  dotc = sdot
+  asum = sasum
+  nrm2 = snrm2
+  iamax = isamax
+  axpy = saxpy
+  scal = sscal
+  rscal = sscal
+  copy = scopy
+  swap = sswap
+
 instance Scalar Double where
   type RealPart Double = Double
+  dotu = ddot
+  dotc = ddot
+  asum = dasum
+  nrm2 = dnrm2
+  iamax = idamax
+  axpy = daxpy
+  scal = dscal
+  rscal = dscal
+  copy = dcopy
+  swap = dswap
 
-  dotu x y =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptrx incx ->
-    unsafeWithV y $ \_ ptry incy ->
-      [C.exp|
-        double {
-          BLASFUNC(ddot)
-          ( &$(blasint n)
-          , $(double* ptrx)
-          , &$(blasint incx)
-          , $(double* ptry)
-          , &$(blasint incy)
-          )
-        }
-      |]
+instance Scalar (Complex Float) where
+  type RealPart (Complex Float) = Float
+  dotu = cdot
+  dotc = cdot
+  asum = scasum
+  nrm2 = scnrm2
+  iamax = icamax
+  axpy = caxpy
+  scal = cscal
+  rscal = csscal
+  copy = ccopy
+  swap = cswap
 
-  dotc = dotu
+instance Scalar (Complex Double) where
+  type RealPart (Complex Double) = Double
+  dotu = zdot
+  dotc = zdot
+  asum = dzasum
+  nrm2 = dznrm2
+  iamax = izamax
+  axpy = zaxpy
+  scal = zscal
+  rscal = zdscal
+  copy = zcopy
+  swap = zswap
 
-  asum x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dasum)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  iamax x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        blasint {
-          BLASFUNC(idamax)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  amax x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(damax)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  iamin x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        blasint {
-          BLASFUNC(idamin)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  amin x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(damin)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  max x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dmax)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  min x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dmin)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  nrm2 x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dnrm2)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  axpy a x y =
-    unsafePrimToPrim $
-    unsafeWithV x $ \n ptrx incx ->
-    withV y $ \_ ptry incy ->
-      [C.block|
-        void {
-          BLASFUNC(daxpy)
-          ( &$(blasint n)
-          , &$(double a)
-          , $(double* ptrx)
-          , &$(blasint incx)
-          , $(double* ptry)
-          , &$(blasint incy)
-          );
-        }
-      |]
-
-  axpyc = axpy
-
-  scal a x =
-    unsafePrimToPrim $
-    withV x $ \n ptr inc ->
-      [C.exp|
-        void {
-          BLASFUNC(dscal)
-          ( &$(blasint n)
-          , &$(double a)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  rscal = scal
-
-  copy x y =
-    unsafePrimToPrim $
-    unsafeWithV x $ \n ptrx incx ->
-    withV y $ \_ ptry incy ->
-      [C.exp|
-        void {
-          BLASFUNC(dcopy)
-          ( &$(blasint n)
-          , $(double* ptrx)
-          , &$(blasint incx)
-          , $(double* ptry)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  swap x y =
-    unsafePrimToPrim $
-    withV x $ \n ptrx incx ->
-    withV y $ \_ ptry incy ->
-      [C.exp|
-        void {
-          BLASFUNC(dswap)
-          ( &$(blasint n)
-          , $(double* ptrx)
-          , &$(blasint incx)
-          , $(double* ptry)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
+{-
+instance Scalar Double where
   gbmv alpha a x beta y =
     unsafePrimToPrim $
     unsafeWithGB a $ \trans m n kl ku pa lda ->
@@ -448,18 +326,18 @@ instance Scalar Double where
         void {
           BLASFUN(dgbmv)
           ( $trans:trans
-          , &$(blasint m)
-          , &$(blasint n)
-          , &$(blasint kl)
-          , &$(blasint ku)
+          , &$(INT m)
+          , &$(INT n)
+          , &$(INT kl)
+          , &$(INT ku)
           , &$(double alpha)
           , $(double* pa)
-          , &$(blasint lda)
+          , &$(INT lda)
           , $(double* px)
-          , &$(blasint incx)
+          , &$(INT incx)
           , &$(double beta)
           , $(double* py)
-          , &$(blasint incy)
+          , &$(INT incy)
           )
         }
       |]
@@ -473,16 +351,16 @@ instance Scalar Double where
         void {
           BLASFUN(dgemv)
           ( $trans:trans
-          , &$(blasint m)
-          , &$(blasint n)
+          , &$(INT m)
+          , &$(INT n)
           , $(double alpha)
           , $(double* pa)
-          , &$(blasint lda)
+          , &$(INT lda)
           , $(double *px)
-          , &$(blasint incx)
+          , &$(INT incx)
           , $(double beta)
           , $(double* py)
-          , &$(blasint incy)
+          , &$(INT incy)
           )
         }
       |]
@@ -496,16 +374,16 @@ instance Scalar Double where
         void {
           BLASFUN(dsbmv)
           ( $uplo:uplo
-          , &$(blasint nn)
-          , &$(blasint kk)
+          , &$(INT nn)
+          , &$(INT kk)
           , $(double alpha)
           , $(double* pa)
-          , &$(blasint lda)
+          , &$(INT lda)
           , $(double* px)
-          , &$(blasint incx)
+          , &$(INT incx)
           , $(double beta)
           , $(double* py)
-          , &$(blasint incy)
+          , &$(INT incy)
           )
         }
       |]
@@ -519,15 +397,15 @@ instance Scalar Double where
         void {
           BLASFUN(dsymv)
           ( $uplo:uplo
-          , &$(blasint nn)
+          , &$(INT nn)
           , $(double alpha)
           , $(double* pa)
-          , &$(blasint lda)
+          , &$(INT lda)
           , $(double* px)
-          , &$(blasint incx)
+          , &$(INT incx)
           , $(double beta)
           , $(double* py)
-          , &$(blasint incy)
+          , &$(INT incy)
           )
         }
       |]
@@ -541,14 +419,14 @@ instance Scalar Double where
         void {
           BLASFUN(dspmv)
           ( $uplo:uplo
-          , &$(blasint nn)
+          , &$(INT nn)
           , $(double alpha)
           , $(double* pa)
           , $(double* px)
-          , &$(blasint incx)
+          , &$(INT incx)
           , $(double beta)
           , $(double* py)
-          , &$(blasint incy)
+          , &$(INT incy)
           )
         }
       |]
@@ -563,12 +441,12 @@ instance Scalar Double where
           ( $uplo:uplo
           , $trans:trans
           , $diag:diag
-          , &$(blasint nn)
-          , &$(blasint kk)
+          , &$(INT nn)
+          , &$(INT kk)
           , $(double* pa)
-          , &$(blasint lda)
+          , &$(INT lda)
           , $(double* px)
-          , &$(blasint incx)
+          , &$(INT incx)
           )
         }
       |]
@@ -583,10 +461,10 @@ instance Scalar Double where
           ( $uplo:uplo
           , $trans:trans
           , $diag:diag
-          , &$(blasint nn)
+          , &$(INT nn)
           , $(double* pa)
           , $(double* px)
-          , &$(blasint incx)
+          , &$(INT incx)
           )
         }
       |]
@@ -601,11 +479,11 @@ instance Scalar Double where
           ( $uplo:uplo
           , $trans:trans
           , $diag:diag
-          , &$(blasint nn)
+          , &$(INT nn)
           , $(double* pa)
-          , &$(blasint lda)
+          , &$(INT lda)
           , $(double* px)
-          , &$(blasint incx)
+          , &$(INT incx)
           )
         }
       |]
@@ -620,12 +498,12 @@ instance Scalar Double where
           ( $uplo:uplo
           , $trans:trans
           , $diag:diag
-          , &$(blasint nn)
-          , &$(blasint kk)
+          , &$(INT nn)
+          , &$(INT kk)
           , $(double* pa)
-          , &$(blasint lda)
+          , &$(INT lda)
           , $(double* px)
-          , &$(blasint incx)
+          , &$(INT incx)
           )
         }
       |]
@@ -640,10 +518,10 @@ instance Scalar Double where
           ( $uplo:uplo
           , $trans:trans
           , $diag:diag
-          , &$(blasint nn)
+          , &$(INT nn)
           , $(double* pa)
           , $(double* px)
-          , &$(blasint incx)
+          , &$(INT incx)
           )
         }
       |]
@@ -658,11 +536,11 @@ instance Scalar Double where
           ( $uplo:uplo
           , $trans:trans
           , $diag:diag
-          , &$(blasint nn)
+          , &$(INT nn)
           , $(double* pa)
-          , &$(blasint lda)
+          , &$(INT lda)
           , $(double* px)
-          , &$(blasint incx)
+          , &$(INT incx)
           )
         }
       |]
@@ -677,15 +555,15 @@ instance Scalar Double where
           [C.block|
             void {
               BLASFUNC(dger)
-              ( &$(blasint nr)
-              , &$(blasint nc)
+              ( &$(INT nr)
+              , &$(INT nc)
               , $(double alpha)
               , $(double* px)
-              , &$(blasint incx)
+              , &$(INT incx)
               , $(double* py)
-              , &$(blasint incy)
+              , &$(INT incy)
               , $(double* pa)
-              , &$(blasint lda)
+              , &$(INT lda)
               )
             }
           |]
@@ -693,15 +571,15 @@ instance Scalar Double where
           [C.block|
             void {
               BLASFUNC(dger)
-              ( &$(blasint nr)
-              , &$(blasint nc)
+              ( &$(INT nr)
+              , &$(INT nc)
               , $(double alpha)
               , $(double* py)
-              , &$(blasint incy)
+              , &$(INT incy)
               , $(double* px)
-              , &$(blasint incx)
+              , &$(INT incx)
               , $(double* pa)
-              , &$(blasint lda)
+              , &$(INT lda)
               )
             }
           |]
@@ -716,12 +594,12 @@ instance Scalar Double where
         void {
           BLASFUN(dsyr)
           ( $uplo:uplo
-          , &$(blasint nn)
+          , &$(INT nn)
           , $(double alpha)
           , $(double* px)
-          , &$(blasint incx)
+          , &$(INT incx)
           , $(double* pa)
-          , &$(blasint lda)
+          , &$(INT lda)
           )
         }
       |]
@@ -735,14 +613,14 @@ instance Scalar Double where
         void {
           BLASFUN(dsyr2)
           ( $uplo:uplo
-          , &$(blasint nn)
+          , &$(INT nn)
           , $(double alpha)
           , $(double* px)
-          , &$(blasint incx)
+          , &$(INT incx)
           , $(double* py)
-          , &$(blasint incy)
+          , &$(INT incy)
           , $(double* pa)
-          , &$(blasint lda)
+          , &$(INT lda)
           )
         }
       |]
@@ -755,10 +633,10 @@ instance Scalar Double where
         void {
           BLASFUN(dhpr)
           ( $uplo:uplo
-          , &$(blasint nn)
+          , &$(INT nn)
           , $(double alpha)
           , $(double* px)
-          , &$(blasint incx)
+          , &$(INT incx)
           , $(double* pa)
           )
         }
@@ -773,12 +651,12 @@ instance Scalar Double where
         void {
           BLASFUN(dhpr2)
           ( $uplo:uplo
-          , &$(blasint nn)
+          , &$(INT nn)
           , $(double alpha)
           , $(double* px)
-          , &$(blasint incx)
+          , &$(INT incx)
           , $(double* py)
-          , &$(blasint incy)
+          , &$(INT incy)
           , $(double* pa)
           )
         }
@@ -786,270 +664,6 @@ instance Scalar Double where
 
 
 instance Scalar (Complex Double) where
-  type RealPart (Complex Double) = Double
-
-  dotu x y =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptrx incx ->
-    unsafeWithV y $ \_ ptry incy ->
-    alloca $ \z -> do
-      [C.block|
-        void {
-          #ifdef RETURN_BY_STACK
-          BLASFUNC(zdotu)
-          ( $(openblas_complex_double* z)
-          , &$(blasint n)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          )
-          #else
-          *$(openblas_complex_double* z) =
-          BLASFUNC(zdotu)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          );
-          #endif
-        }
-      |]
-      peek z
-
-  dotc x y =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptrx incx ->
-    unsafeWithV y $ \_ ptry incy ->
-    alloca $ \z -> do
-      [C.block|
-        void {
-          #ifdef RETURN_BY_STACK
-          BLASFUNC(zdotc)
-          ( $(openblas_complex_double* z)
-          , &$(blasint n)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          )
-          #else
-          *$(openblas_complex_double* z) =
-          BLASFUNC(zdotc)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          );
-          #endif
-        }
-      |]
-      peek z
-
-  asum x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dzasum)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  iamax x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        blasint {
-          BLASFUNC(izamax)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  amax x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dzamax)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  iamin x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        blasint {
-          BLASFUNC(izamin)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  amin x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dzamin)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  max x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dzmax)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  min x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dzmin)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  nrm2 x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dznrm2)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  axpy a x y =
-    unsafePrimToPrim $
-    unsafeWithV x $ \n ptrx incx ->
-    withV y $ \_ ptry incy ->
-    with a $ \pa ->
-      [C.block|
-        void {
-          BLASFUNC(zaxpy)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* pa)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          );
-        }
-      |]
-
-  axpyc a x y =
-    unsafePrimToPrim $
-    unsafeWithV x $ \n ptrx incx ->
-    withV y $ \_ ptry incy ->
-    with a $ \pa ->
-      [C.block|
-        void {
-          BLASFUNC(zaxpyc)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* pa)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          );
-        }
-      |]
-
-  scal a x =
-    unsafePrimToPrim $
-    withV x $ \n ptr inc ->
-    with a $ \pa ->
-      [C.block|
-        void {
-          BLASFUNC(zscal)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* pa)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          );
-        }
-      |]
-
-  rscal a x =
-    unsafePrimToPrim $
-    withV x $ \n ptr inc ->
-    with a $ \pa ->
-      [C.block|
-        void {
-          BLASFUNC(zdscal)
-          ( &$(blasint n)
-          , $(double* pa)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          );
-        }
-      |]
-
-  copy x y =
-    unsafePrimToPrim $
-    unsafeWithV x $ \n ptrx incx ->
-    withV y $ \_ ptry incy ->
-      [C.exp|
-        void {
-          BLASFUNC(zcopy)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  swap x y =
-    unsafePrimToPrim $
-    withV x $ \n ptrx incx ->
-    withV y $ \_ ptry incy ->
-      [C.exp|
-        void {
-          cblas_zswap
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
   gbmv alpha a x beta y =
     unsafePrimToPrim $
     with alpha $ \palpha ->
@@ -1061,18 +675,18 @@ instance Scalar (Complex Double) where
         void {
           BLASFUN(zgbmv)
           ( $trans:trans
-          , &$(blasint m)
-          , &$(blasint n)
-          , &$(blasint kl)
-          , &$(blasint ku)
-          , (double*)$(openblas_complex_double* palpha)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* pbeta)
-          , (double*)$(openblas_complex_double* py)
-          , &$(blasint incy)
+          , &$(INT m)
+          , &$(INT n)
+          , &$(INT kl)
+          , &$(INT ku)
+          , (double*)$(double_complex* palpha)
+          , (double*)$(double_complex* pa)
+          , &$(INT lda)
+          , (double*)$(double_complex* px)
+          , &$(INT incx)
+          , (double*)$(double_complex* pbeta)
+          , (double*)$(double_complex* py)
+          , &$(INT incy)
           )
         }
       |]
@@ -1088,16 +702,16 @@ instance Scalar (Complex Double) where
         void {
           BLASFUN(zgemv)
           ( $trans:trans
-          , &$(blasint m)
-          , &$(blasint n)
-          , (double*)$(openblas_complex_double* palpha)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* pbeta)
-          , (double*)$(openblas_complex_double* py)
-          , &$(blasint incy)
+          , &$(INT m)
+          , &$(INT n)
+          , (double*)$(double_complex* palpha)
+          , (double*)$(double_complex* pa)
+          , &$(INT lda)
+          , (double*)$(double_complex* px)
+          , &$(INT incx)
+          , (double*)$(double_complex* pbeta)
+          , (double*)$(double_complex* py)
+          , &$(INT incy)
           )
         }
       |]
@@ -1113,16 +727,16 @@ instance Scalar (Complex Double) where
         void {
           BLASFUN(zhbmv)
           ( $uplo:uplo
-          , &$(blasint nn)
-          , &$(blasint kk)
-          , (double*)$(openblas_complex_double* palpha)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* pbeta)
-          , (double*)$(openblas_complex_double* py)
-          , &$(blasint incy)
+          , &$(INT nn)
+          , &$(INT kk)
+          , (double*)$(double_complex* palpha)
+          , (double*)$(double_complex* pa)
+          , &$(INT lda)
+          , (double*)$(double_complex* px)
+          , &$(INT incx)
+          , (double*)$(double_complex* pbeta)
+          , (double*)$(double_complex* py)
+          , &$(INT incy)
           )
         }
       |]
@@ -1138,15 +752,15 @@ instance Scalar (Complex Double) where
         void {
           BLASFUN(zhemv)
           ( $uplo:uplo
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* palpha)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* pbeta)
-          , (double*)$(openblas_complex_double* py)
-          , &$(blasint incy)
+          , &$(INT nn)
+          , (double*)$(double_complex* palpha)
+          , (double*)$(double_complex* pa)
+          , &$(INT lda)
+          , (double*)$(double_complex* px)
+          , &$(INT incx)
+          , (double*)$(double_complex* pbeta)
+          , (double*)$(double_complex* py)
+          , &$(INT incy)
           )
         }
       |]
@@ -1162,14 +776,14 @@ instance Scalar (Complex Double) where
         void {
           BLASFUN(zhpmv)
           ( $uplo:uplo
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* palpha)
-          , (double*)$(openblas_complex_double* pa)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* pbeta)
-          , (double*)$(openblas_complex_double* py)
-          , &$(blasint incy)
+          , &$(INT nn)
+          , (double*)$(double_complex* palpha)
+          , (double*)$(double_complex* pa)
+          , (double*)$(double_complex* px)
+          , &$(INT incx)
+          , (double*)$(double_complex* pbeta)
+          , (double*)$(double_complex* py)
+          , &$(INT incy)
           )
         }
       |]
@@ -1184,12 +798,12 @@ instance Scalar (Complex Double) where
           ( $uplo:uplo
           , $trans:trans
           , $diag:diag
-          , &$(blasint nn)
-          , &$(blasint kk)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
+          , &$(INT nn)
+          , &$(INT kk)
+          , (double*)$(double_complex* pa)
+          , &$(INT lda)
+          , (double*)$(double_complex* px)
+          , &$(INT incx)
           )
         }
       |]
@@ -1204,10 +818,10 @@ instance Scalar (Complex Double) where
           ( $uplo:uplo
           , $trans:trans
           , $diag:diag
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* pa)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
+          , &$(INT nn)
+          , (double*)$(double_complex* pa)
+          , (double*)$(double_complex* px)
+          , &$(INT incx)
           )
         }
       |]
@@ -1222,11 +836,11 @@ instance Scalar (Complex Double) where
           ( $uplo:uplo
           , $trans:trans
           , $diag:diag
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
+          , &$(INT nn)
+          , (double*)$(double_complex* pa)
+          , &$(INT lda)
+          , (double*)$(double_complex* px)
+          , &$(INT incx)
           )
         }
       |]
@@ -1241,12 +855,12 @@ instance Scalar (Complex Double) where
           ( $uplo:uplo
           , $trans:trans
           , $diag:diag
-          , &$(blasint nn)
-          , &$(blasint kk)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
+          , &$(INT nn)
+          , &$(INT kk)
+          , (double*)$(double_complex* pa)
+          , &$(INT lda)
+          , (double*)$(double_complex* px)
+          , &$(INT incx)
           )
         }
       |]
@@ -1261,10 +875,10 @@ instance Scalar (Complex Double) where
           ( $uplo:uplo
           , $trans:trans
           , $diag:diag
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* pa)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
+          , &$(INT nn)
+          , (double*)$(double_complex* pa)
+          , (double*)$(double_complex* px)
+          , &$(INT incx)
           )
         }
       |]
@@ -1279,11 +893,11 @@ instance Scalar (Complex Double) where
           ( $uplo:uplo
           , $trans:trans
           , $diag:diag
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
+          , &$(INT nn)
+          , (double*)$(double_complex* pa)
+          , &$(INT lda)
+          , (double*)$(double_complex* px)
+          , &$(INT incx)
           )
         }
       |]
@@ -1299,15 +913,15 @@ instance Scalar (Complex Double) where
             [C.block|
               void {
                 BLASFUNC(zgeru)
-                ( &$(blasint nr)
-                , &$(blasint nc)
-                , (double*)$(openblas_complex_double* palpha)
-                , (double*)$(openblas_complex_double* px)
-                , &$(blasint incx)
-                , (double*)$(openblas_complex_double* py)
-                , &$(blasint incy)
-                , (double*)$(openblas_complex_double* pa)
-                , &$(blasint lda)
+                ( &$(INT nr)
+                , &$(INT nc)
+                , (double*)$(double_complex* palpha)
+                , (double*)$(double_complex* px)
+                , &$(INT incx)
+                , (double*)$(double_complex* py)
+                , &$(INT incy)
+                , (double*)$(double_complex* pa)
+                , &$(INT lda)
                 )
               }
             |]
@@ -1317,15 +931,15 @@ instance Scalar (Complex Double) where
             [C.block|
               void {
                 BLASFUNC(zgeru)
-                ( &$(blasint nr)
-                , &$(blasint nc)
-                , (double*)$(openblas_complex_double* palpha)
-                , (double*)$(openblas_complex_double* py)
-                , &$(blasint incy)
-                , (double*)$(openblas_complex_double* px)
-                , &$(blasint incx)
-                , (double*)$(openblas_complex_double* pa)
-                , &$(blasint lda)
+                ( &$(INT nr)
+                , &$(INT nc)
+                , (double*)$(double_complex* palpha)
+                , (double*)$(double_complex* py)
+                , &$(INT incy)
+                , (double*)$(double_complex* px)
+                , &$(INT incx)
+                , (double*)$(double_complex* pa)
+                , &$(INT lda)
                 )
               }
             |]
@@ -1335,15 +949,15 @@ instance Scalar (Complex Double) where
             [C.block|
               void {
                 BLASFUNC(zgerc)
-                ( &$(blasint nr)
-                , &$(blasint nc)
-                , (double*)$(openblas_complex_double* palpha)
-                , (double*)$(openblas_complex_double* py)
-                , &$(blasint incy)
-                , (double*)$(openblas_complex_double* px)
-                , &$(blasint incx)
-                , (double*)$(openblas_complex_double* pa)
-                , &$(blasint lda)
+                ( &$(INT nr)
+                , &$(INT nc)
+                , (double*)$(double_complex* palpha)
+                , (double*)$(double_complex* py)
+                , &$(INT incy)
+                , (double*)$(double_complex* px)
+                , &$(INT incx)
+                , (double*)$(double_complex* pa)
+                , &$(INT lda)
                 )
               }
             |]
@@ -1359,15 +973,15 @@ instance Scalar (Complex Double) where
             [C.block|
               void {
                 BLASFUNC(zgerc)
-                ( &$(blasint nr)
-                , &$(blasint nc)
-                , (double*)$(openblas_complex_double* palpha)
-                , (double*)$(openblas_complex_double* px)
-                , &$(blasint incx)
-                , (double*)$(openblas_complex_double* py)
-                , &$(blasint incy)
-                , (double*)$(openblas_complex_double* pa)
-                , &$(blasint lda)
+                ( &$(INT nr)
+                , &$(INT nc)
+                , (double*)$(double_complex* palpha)
+                , (double*)$(double_complex* px)
+                , &$(INT incx)
+                , (double*)$(double_complex* py)
+                , &$(INT incy)
+                , (double*)$(double_complex* pa)
+                , &$(INT lda)
                 )
               }
             |]
@@ -1377,15 +991,15 @@ instance Scalar (Complex Double) where
             [C.block|
               void {
                 BLASFUNC(zgeru)
-                ( &$(blasint nr)
-                , &$(blasint nc)
-                , (double*)$(openblas_complex_double* palpha)
-                , (double*)$(openblas_complex_double* py)
-                , &$(blasint incy)
-                , (double*)$(openblas_complex_double* px)
-                , &$(blasint incx)
-                , (double*)$(openblas_complex_double* pa)
-                , &$(blasint lda)
+                ( &$(INT nr)
+                , &$(INT nc)
+                , (double*)$(double_complex* palpha)
+                , (double*)$(double_complex* py)
+                , &$(INT incy)
+                , (double*)$(double_complex* px)
+                , &$(INT incx)
+                , (double*)$(double_complex* pa)
+                , &$(INT lda)
                 )
               }
             |]
@@ -1395,15 +1009,15 @@ instance Scalar (Complex Double) where
             [C.block|
               void {
                 BLASFUNC(zgerc)
-                ( &$(blasint nr)
-                , &$(blasint nc)
-                , (double*)$(openblas_complex_double* palpha)
-                , (double*)$(openblas_complex_double* py)
-                , &$(blasint incy)
-                , (double*)$(openblas_complex_double* px)
-                , &$(blasint incx)
-                , (double*)$(openblas_complex_double* pa)
-                , &$(blasint lda)
+                ( &$(INT nr)
+                , &$(INT nc)
+                , (double*)$(double_complex* palpha)
+                , (double*)$(double_complex* py)
+                , &$(INT incy)
+                , (double*)$(double_complex* px)
+                , &$(INT incx)
+                , (double*)$(double_complex* pa)
+                , &$(INT lda)
                 )
               }
             |]
@@ -1416,12 +1030,12 @@ instance Scalar (Complex Double) where
         void {
           BLASFUN(zher)
           ( $uplo:uplo
-          , &$(blasint nn)
+          , &$(INT nn)
           , $(double alpha)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
+          , (double*)$(double_complex* px)
+          , &$(INT incx)
+          , (double*)$(double_complex* pa)
+          , &$(INT lda)
           )
         }
       |]
@@ -1436,14 +1050,14 @@ instance Scalar (Complex Double) where
         void {
           BLASFUN(zher2)
           ( $uplo:uplo
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* palpha)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* py)
-          , &$(blasint incy)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
+          , $(const INT nn)
+          , $(double_complex* palpha)
+          , $(double_complex* px)
+          , $(const INT incx)
+          , $(double_complex* py)
+          , $(const INT incy)
+          , $(double_complex* pa)
+          , $(const INT lda)
           )
         }
       |]
@@ -1454,13 +1068,13 @@ instance Scalar (Complex Double) where
     withHP a $ \uplo nn pa ->
       [C.block|
         void {
-          BLASFUN(zhpr)
+          cblas_zhpr
           ( $uplo:uplo
-          , &$(blasint nn)
-          , $(double alpha)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* pa)
+          , $(const INT nn)
+          , $(const double alpha)
+          , $(const double_complex* px)
+          , $(const INT incx)
+          , $(double_complex* pa)
           )
         }
       |]
@@ -1473,15 +1087,16 @@ instance Scalar (Complex Double) where
     withHP a $ \uplo nn pa ->
       [C.block|
         void {
-          BLASFUN(zhpr2)
+          cblas_zhpr2
           ( $uplo:uplo
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* palpha)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* py)
-          , &$(blasint incy)
-          , (double*)$(openblas_complex_double* pa)
+          , $(const INT nn)
+          , $(const double_complex* palpha)
+          , $(const double_complex* px)
+          , $(const INT incx)
+          , $(const double_complex* py)
+          , $(const INT incy)
+          , $(double_complex* pa)
           )
         }
       |]
+-}

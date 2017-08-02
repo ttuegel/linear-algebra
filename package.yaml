@@ -3,13 +3,13 @@ version: 0.0.0
 github: ttuegel/openblas
 
 flags:
-  use-64bit-int:
+  use-int64:
     manual: True
     default: False
     description:
-      Set if your BLAS library uses 64-bit integer indices.
-      (The traditional interface uses 32-bit integers even
-      on 64-bit architectures.)
+      Use 64-bit integers in the BLAS library interface.
+      Traditionally, BLAS uses 32-bit integers, even on 64-bit platforms.
+      Modern BLAS implementations may support 64-bit integers instead.
 
 ghc-options: -Wall
 
@@ -37,6 +37,7 @@ dependencies:
   - parsers
   - primitive
   - template-haskell
+  - transformers
   - vector
 
 library:
@@ -46,6 +47,8 @@ library:
     - Data.Int.Blas
   extra-libraries:
     - openblas
+  include-dirs:
+    - include/
   when:
-    - condition: flag(use-64bit-int)
-      cpp-options: -DOPENBLAS_USE64BITINT
+    - condition: flag(use-int64)
+      cpp-options: -DINT=int64_t
