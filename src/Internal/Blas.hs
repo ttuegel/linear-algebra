@@ -76,6 +76,16 @@ cblas_gbmv [t| Double |] "dgbmv"
 cblas_gbmv [t| Complex Float |] "cgbmv"
 cblas_gbmv [t| Complex Double |] "zgbmv"
 
+cblas_hemv [t| Float |] "ssymv"
+cblas_hemv [t| Double |] "dsymv"
+cblas_hemv [t| Complex Float |] "chemv"
+cblas_hemv [t| Complex Double |] "zhemv"
+
+cblas_her [t| Float |] [t| Float |] "ssyr"
+cblas_her [t| Double |] [t| Double |] "dsyr"
+cblas_her [t| Float |] [t| Complex Float |] "cher"
+cblas_her [t| Double |] [t| Complex Double |] "zher"
+
 class Storable a => Scalar a where
   type RealPart a
 
@@ -168,9 +178,9 @@ class Storable a => Scalar a where
     :: PrimMonad m =>
        a
     -> HE n a
-    -> V k a
+    -> V n a
     -> a
-    -> Mut (V k) (PrimState m) a
+    -> Mut (V n) (PrimState m) a
     -> m ()
 
   -- | @y <- alpha A x + beta y@
@@ -296,6 +306,8 @@ instance Scalar Float where
   geru = sger
   gerc = sger
   gbmv = sgbmv
+  hemv = ssymv
+  her = ssyr
 
 instance Scalar Double where
   type RealPart Double = Double
@@ -313,6 +325,8 @@ instance Scalar Double where
   geru = dger
   gerc = dger
   gbmv = dgbmv
+  hemv = dsymv
+  her = dsyr
 
 instance Scalar (Complex Float) where
   type RealPart (Complex Float) = Float
@@ -330,6 +344,8 @@ instance Scalar (Complex Float) where
   geru = cgeru
   gerc = cgerc
   gbmv = cgbmv
+  hemv = chemv
+  her = cher
 
 instance Scalar (Complex Double) where
   type RealPart (Complex Double) = Double
@@ -347,6 +363,8 @@ instance Scalar (Complex Double) where
   geru = zgeru
   gerc = zgerc
   gbmv = zgbmv
+  hemv = zhemv
+  her = zher
 
 {-
 instance Scalar Double where

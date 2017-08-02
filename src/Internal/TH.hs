@@ -39,12 +39,15 @@ class Build a where
   dimMutVec :: E a -> WriterT (Acc a) Q (D a)
   dimGE :: E a -> WriterT (Acc a) Q (D a, D a)
   dimGB :: E a -> WriterT (Acc a) Q (D a, D a)
+  dimHE :: E a -> WriterT (Acc a) Q (D a)
   vec :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
   mutVec :: E a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
   scalar :: E a -> Q Type -> WriterT (Acc a) Q ()
   matGE :: E a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
   matMutGE :: E a -> M a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
   matGB :: E a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matHE :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matMutHE :: E a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
 
 tellC :: (Type -> Q Type) -> WriterT (Acc (C Type)) Q ()
 tellC = tell . AccC . Dual . Endo
@@ -76,6 +79,8 @@ instance Build (C Type) where
     tellC $ \r -> [t| I -> I -> I -> I -> I -> $(pure r) |]
     pure ((), ())
 
+  dimHE _ = tellC $ \r -> [t| I -> I -> $(pure r) |]
+
   vec _ () a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
   mutVec e _ = vec e
 
@@ -89,6 +94,10 @@ instance Build (C Type) where
   matMutGE e _ = matGE e
 
   matGB _ _ _ a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
+
+  matHE _ _ a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
+
+  matMutHE e _ = matHE e
 
 tellHsType :: (Type -> Q Type) -> WriterT (Acc (Hs Type)) Q ()
 tellHsType = tell . AccHsType . Dual . Endo
@@ -145,6 +154,15 @@ instance Build (Hs Type) where
     tellHsType $ \r -> forallT tvars ctx (pure r)
     lift $ (,) <$> varT j <*> varT k
 
+  dimHE _ = do
+    n <- lift $ newName "n"
+    dimk <- lift [t| Dim |]
+    let
+      tvars = [ KindedTV n dimk ]
+      ctx = pure []
+    tellHsType $ \r -> forallT tvars ctx (pure r)
+    lift (varT n)
+
   vec _ n a = tellHsType $ \r -> [t| V $(pure n) $a -> $(pure r) |]
 
   mutVec _ m n a =
@@ -162,6 +180,11 @@ instance Build (Hs Type) where
 
   matGB _ j k a =
     tellHsType $ \r -> [t| GB $(pure j) $(pure k) $a -> $(pure r) |]
+
+  matHE _ n a = tellHsType $ \r -> [t| HE $(pure n) $a -> $(pure r) |]
+
+  matMutHE _ m n a = tellHsType $ \r ->
+    [t| Mut (HE $(pure n)) (PrimState $(pure m)) $a -> $(pure r) |]
 
 instance Build Exp where
   data Acc Exp
@@ -236,6 +259,17 @@ instance Build Exp where
       }
     pure ((), ())
 
+  dimHE v = do
+    uplo <- lift $ newName "uplo"
+    nn <- lift $ newName "nn"
+    tell mempty
+      { getCall = Endo $ \call ->
+          [| $(pure call) (uploToI $(varE uplo)) $(varE nn) |]
+      , getBody = (Dual . Endo) $ \r ->
+          let binds = [varP uplo, varP nn, wildP, wildP] in
+            [| unsafeWithHE $(pure v) $(lamE binds (pure r)) |]
+      }
+
   vec v _ _ = do
     p <- lift $ newName "p"
     i <- lift $ newName "i"
@@ -291,6 +325,26 @@ instance Build Exp where
           , getBody = (Dual . Endo) $ \r ->
               let binds = [wildP, wildP, wildP, wildP, wildP, varP p, varP ld] in
                 [| unsafeWithGB $(pure gb) $(lamE binds (pure r)) |]
+          }
+
+  matHE he _ _ = do
+    p <- lift (newName "p")
+    ld <- lift (newName "ld")
+    tell mempty
+          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
+          , getBody = (Dual . Endo) $ \r ->
+              let binds = [wildP, wildP, varP p, varP ld] in
+                [| unsafeWithHE $(pure he) $(lamE binds (pure r)) |]
+          }
+
+  matMutHE he _ _ _ = do
+    p <- lift (newName "p")
+    ld <- lift (newName "ld")
+    tell mempty
+          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
+          , getBody = (Dual . Endo) $ \r ->
+              let binds = [wildP, wildP, varP p, varP ld] in
+                [| withHE $(pure he) $(lamE binds (pure r)) |]
           }
 
 instance Semigroup (Acc Exp) where
@@ -443,6 +497,34 @@ gbmv t m = do
   mutVec y m r t
   unitT
 
+hemv :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
+hemv t m = do
+  alpha <- bind "alpha"
+  a <- bind "a"
+  x <- bind "x"
+  beta <- bind "beta"
+  y <- bind "y"
+  order
+  n <- dimHE a
+  scalar alpha t
+  matHE a n t
+  vec x n t
+  scalar beta t
+  mutVec y m n t
+  unitT
+
+her :: Build a => Q Type -> Q Type -> M a -> WriterT (Acc a) Q Type
+her s t m = do
+  alpha <- bind "alpha"
+  x <- bind "x"
+  a <- bind "a"
+  order
+  n <- dimVec x
+  scalar alpha s
+  vec x n t
+  matMutHE a m n t
+  unitT
+
 cblas_dot :: Q Type -> String -> Q [Dec]
 cblas_dot t = cblas (dot t)
 
@@ -469,3 +551,9 @@ cblas_ger t = cblas (ger t)
 
 cblas_gbmv :: Q Type -> String -> Q [Dec]
 cblas_gbmv t = cblas (gbmv t)
+
+cblas_hemv :: Q Type -> String -> Q [Dec]
+cblas_hemv t = cblas (hemv t)
+
+cblas_her :: Q Type -> Q Type -> String -> Q [Dec]
+cblas_her s t = cblas (her s t)
