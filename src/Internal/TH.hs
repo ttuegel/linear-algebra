@@ -525,6 +525,20 @@ her s t m = do
   matMutHE a m n t
   unitT
 
+her2 :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
+her2 t m = do
+  alpha <- bind "alpha"
+  x <- bind "x"
+  y <- bind "y"
+  a <- bind "a"
+  order
+  n <- dimVec x
+  scalar alpha t
+  vec x n t
+  vec y n t
+  matMutHE a m n t
+  unitT
+
 cblas_dot :: Q Type -> String -> Q [Dec]
 cblas_dot t = cblas (dot t)
 
@@ -557,3 +571,6 @@ cblas_hemv t = cblas (hemv t)
 
 cblas_her :: Q Type -> Q Type -> String -> Q [Dec]
 cblas_her s t = cblas (her s t)
+
+cblas_her2 :: Q Type -> String -> Q [Dec]
+cblas_her2 t = cblas (her2 t)
