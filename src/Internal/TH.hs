@@ -52,6 +52,7 @@ class Build a where
   matMutHE :: E a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
   matHB :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
   matHP :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matMutHP :: E a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
 
 tellC :: (Type -> Q Type) -> WriterT (Acc (C Type)) Q ()
 tellC = tell . AccC . Dual . Endo
@@ -110,6 +111,8 @@ instance Build (C Type) where
   matHB _ _ a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
 
   matHP _ _ a = tellC $ \r -> [t| Ptr $a -> $(pure r) |]
+
+  matMutHP e _ = matHP e
 
 tellHsType :: (Type -> Q Type) -> WriterT (Acc (Hs Type)) Q ()
 tellHsType = tell . AccHsType . Dual . Endo
@@ -197,6 +200,9 @@ instance Build (Hs Type) where
   matHB _ n a = tellHsType $ \r -> [t| HB $(pure n) $a -> $(pure r) |]
 
   matHP _ n a = tellHsType $ \r -> [t| HP $(pure n) $a -> $(pure r) |]
+
+  matMutHP _ m n a = tellHsType $ \r ->
+    [t| Mut (HP $(pure n)) (PrimState $(pure m)) $a -> $(pure r) |]
 
 instance Build Exp where
   data Acc Exp
@@ -399,6 +405,15 @@ instance Build Exp where
           , getBody = (Dual . Endo) $ \r ->
               let binds = [wildP, wildP, varP p] in
                 [| unsafeWithHP $(pure hp) $(lamE binds (pure r)) |]
+          }
+
+  matMutHP hp _ _ _ = do
+    p <- lift (newName "p")
+    tell mempty
+          { getCall = Endo $ \call -> [| $(pure call) $(varE p) |]
+          , getBody = (Dual . Endo) $ \r ->
+              let binds = [wildP, wildP, varP p] in
+                [| withHP $(pure hp) $(lamE binds (pure r)) |]
           }
 
 instance Semigroup (Acc Exp) where
@@ -625,6 +640,32 @@ hpmv t m = do
   mutVec y m n t
   unitT
 
+hpr :: Build a => Q Type -> Q Type -> M a -> WriterT (Acc a) Q Type
+hpr s t m = do
+  alpha <- bind "alpha"
+  x <- bind "x"
+  a <- bind "a"
+  order
+  n <- dimVec x
+  scalar alpha s
+  vec x n t
+  matMutHP a m n t
+  unitT
+
+hpr2 :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
+hpr2 t m = do
+  alpha <- bind "alpha"
+  x <- bind "x"
+  y <- bind "y"
+  a <- bind "a"
+  order
+  n <- dimVec x
+  scalar alpha t
+  vec x n t
+  vec y n t
+  matMutHP a m n t
+  unitT
+
 cblas_dot :: Q Type -> String -> Q [Dec]
 cblas_dot t = cblas (dot t)
 
@@ -666,3 +707,9 @@ cblas_hbmv t = cblas (hbmv t)
 
 cblas_hpmv :: Q Type -> String -> Q [Dec]
 cblas_hpmv t = cblas (hpmv t)
+
+cblas_hpr :: Q Type -> Q Type -> String -> Q [Dec]
+cblas_hpr s t = cblas (hpr s t)
+
+cblas_hpr2 :: Q Type -> String -> Q [Dec]
+cblas_hpr2 t = cblas (hpr2 t)

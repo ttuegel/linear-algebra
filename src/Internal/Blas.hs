@@ -101,6 +101,16 @@ cblas_hpmv [t| Double |] "dspmv"
 cblas_hpmv [t| Complex Float |] "chpmv"
 cblas_hpmv [t| Complex Double |] "zhpmv"
 
+cblas_hpr [t| Float |] [t| Float |] "sspr"
+cblas_hpr [t| Double |] [t| Double |] "dspr"
+cblas_hpr [t| Float |] [t| Complex Float |] "chpr"
+cblas_hpr [t| Double |] [t| Complex Double |] "zhpr"
+
+cblas_hpr2 [t| Float |] "sspr2"
+cblas_hpr2 [t| Double |] "dspr2"
+cblas_hpr2 [t| Complex Float |] "chpr2"
+cblas_hpr2 [t| Complex Double |] "zhpr2"
+
 class Storable a => Scalar a where
   type RealPart a
 
@@ -326,6 +336,8 @@ instance Scalar Float where
   her2 = ssyr2
   hbmv = ssbmv
   hpmv = sspmv
+  hpr = sspr
+  hpr2 = sspr2
 
 instance Scalar Double where
   type RealPart Double = Double
@@ -348,6 +360,8 @@ instance Scalar Double where
   her2 = dsyr2
   hbmv = dsbmv
   hpmv = dspmv
+  hpr = dspr
+  hpr2 = dspr2
 
 instance Scalar (Complex Float) where
   type RealPart (Complex Float) = Float
@@ -370,6 +384,8 @@ instance Scalar (Complex Float) where
   her2 = cher2
   hbmv = chbmv
   hpmv = chpmv
+  hpr = chpr
+  hpr2 = chpr2
 
 instance Scalar (Complex Double) where
   type RealPart (Complex Double) = Double
@@ -392,3 +408,5 @@ instance Scalar (Complex Double) where
   her2 = zher2
   hbmv = zhbmv
   hpmv = zhpmv
+  hpr = zhpr
+  hpr2 = zhpr2
