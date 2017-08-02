@@ -111,6 +111,16 @@ cblas_hpr2 [t| Double |] "dspr2"
 cblas_hpr2 [t| Complex Float |] "chpr2"
 cblas_hpr2 [t| Complex Double |] "zhpr2"
 
+cblas_trmv [t| Float |] "strmv"
+cblas_trmv [t| Double |] "dtrmv"
+cblas_trmv [t| Complex Float |] "ctrmv"
+cblas_trmv [t| Complex Double |] "ztrmv"
+
+cblas_trmv [t| Float |] "strsv"
+cblas_trmv [t| Double |] "dtrsv"
+cblas_trmv [t| Complex Float |] "ctrsv"
+cblas_trmv [t| Complex Double |] "ztrsv"
+
 class Storable a => Scalar a where
   type RealPart a
 
@@ -236,7 +246,7 @@ class Storable a => Scalar a where
   trmv
     :: PrimMonad m =>
        TR n a
-    -> Mut (V k) (PrimState m) a
+    -> Mut (V n) (PrimState m) a
     -> m ()
 
   -- | Compute the solution of a system of linear equations,
@@ -260,7 +270,7 @@ class Storable a => Scalar a where
   trsv
     :: PrimMonad m =>
        TR n a
-    -> Mut (V k) (PrimState m) a
+    -> Mut (V n) (PrimState m) a
     -> m ()
 
   -- | @A <- alpha x y^T + A@
@@ -338,6 +348,8 @@ instance Scalar Float where
   hpmv = sspmv
   hpr = sspr
   hpr2 = sspr2
+  trmv = strmv
+  trsv = strsv
 
 instance Scalar Double where
   type RealPart Double = Double
@@ -362,6 +374,8 @@ instance Scalar Double where
   hpmv = dspmv
   hpr = dspr
   hpr2 = dspr2
+  trmv = dtrmv
+  trsv = dtrsv
 
 instance Scalar (Complex Float) where
   type RealPart (Complex Float) = Float
@@ -386,6 +400,8 @@ instance Scalar (Complex Float) where
   hpmv = chpmv
   hpr = chpr
   hpr2 = chpr2
+  trmv = ctrmv
+  trsv = ctrsv
 
 instance Scalar (Complex Double) where
   type RealPart (Complex Double) = Double
@@ -410,3 +426,5 @@ instance Scalar (Complex Double) where
   hpmv = zhpmv
   hpr = zhpr
   hpr2 = zhpr2
+  trmv = ztrmv
+  trsv = ztrsv

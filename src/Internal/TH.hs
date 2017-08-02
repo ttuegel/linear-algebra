@@ -42,6 +42,7 @@ class Build a where
   dimHE :: E a -> WriterT (Acc a) Q (D a)
   dimHB :: E a -> WriterT (Acc a) Q (D a)
   dimHP :: E a -> WriterT (Acc a) Q (D a)
+  dimTR :: E a -> WriterT (Acc a) Q (D a)
   vec :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
   mutVec :: E a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
   scalar :: E a -> Q Type -> WriterT (Acc a) Q ()
@@ -53,6 +54,7 @@ class Build a where
   matHB :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
   matHP :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
   matMutHP :: E a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matTR :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
 
 tellC :: (Type -> Q Type) -> WriterT (Acc (C Type)) Q ()
 tellC = tell . AccC . Dual . Endo
@@ -90,6 +92,8 @@ instance Build (C Type) where
 
   dimHP _ = tellC $ \r -> [t| I -> I -> $(pure r) |]
 
+  dimTR _ = tellC $ \r -> [t| I -> I -> I -> I -> $(pure r) |]
+
   vec _ () a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
   mutVec e _ = vec e
 
@@ -113,6 +117,8 @@ instance Build (C Type) where
   matHP _ _ a = tellC $ \r -> [t| Ptr $a -> $(pure r) |]
 
   matMutHP e _ = matHP e
+
+  matTR _ _ a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
 
 tellHsType :: (Type -> Q Type) -> WriterT (Acc (Hs Type)) Q ()
 tellHsType = tell . AccHsType . Dual . Endo
@@ -174,6 +180,8 @@ instance Build (Hs Type) where
 
   dimHP = dimHE
 
+  dimTR = dimHE
+
   vec _ n a = tellHsType $ \r -> [t| V $(pure n) $a -> $(pure r) |]
 
   mutVec _ m n a =
@@ -203,6 +211,8 @@ instance Build (Hs Type) where
 
   matMutHP _ m n a = tellHsType $ \r ->
     [t| Mut (HP $(pure n)) (PrimState $(pure m)) $a -> $(pure r) |]
+
+  matTR _ n a = tellHsType $ \r -> [t| TR $(pure n) $a -> $(pure r) |]
 
 instance Build Exp where
   data Acc Exp
@@ -311,6 +321,30 @@ instance Build Exp where
             [| unsafeWithHP $(pure v) $(lamE binds (pure r)) |]
       }
 
+  dimTR v = do
+    uplo <- lift $ newName "uplo"
+    trans <- lift $ newName "trans"
+    diag <- lift $ newName "diag"
+    nn <- lift $ newName "nn"
+    tell mempty
+      { getCall = Endo $ \call ->
+          [| $(pure call)
+             (uploToI $(varE uplo))
+             (transToI $(varE trans))
+             (diagToI $(varE diag))
+             $(varE nn) |]
+      , getBody = (Dual . Endo) $ \r ->
+          let binds = [ varP uplo
+                      , varP trans
+                      , varP diag
+                      , varP nn
+                      , wildP
+                      , wildP
+                      ]
+          in
+            [| unsafeWithTR $(pure v) $(lamE binds (pure r)) |]
+      }
+
   vec v _ _ = do
     p <- lift $ newName "p"
     i <- lift $ newName "i"
@@ -414,6 +448,16 @@ instance Build Exp where
           , getBody = (Dual . Endo) $ \r ->
               let binds = [wildP, wildP, varP p] in
                 [| withHP $(pure hp) $(lamE binds (pure r)) |]
+          }
+
+  matTR tr _ _ = do
+    p <- lift (newName "p")
+    ld <- lift (newName "ld")
+    tell mempty
+          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
+          , getBody = (Dual . Endo) $ \r ->
+              let binds = [wildP, wildP, wildP, wildP, varP p, varP ld] in
+                [| unsafeWithTR $(pure tr) $(lamE binds (pure r)) |]
           }
 
 instance Semigroup (Acc Exp) where
@@ -666,6 +710,16 @@ hpr2 t m = do
   matMutHP a m n t
   unitT
 
+trmv :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
+trmv t m = do
+  a <- bind "a"
+  x <- bind "x"
+  order
+  n <- dimTR a
+  matTR a n t
+  mutVec x m n t
+  unitT
+
 cblas_dot :: Q Type -> String -> Q [Dec]
 cblas_dot t = cblas (dot t)
 
@@ -713,3 +767,6 @@ cblas_hpr s t = cblas (hpr s t)
 
 cblas_hpr2 :: Q Type -> String -> Q [Dec]
 cblas_hpr2 t = cblas (hpr2 t)
+
+cblas_trmv :: Q Type -> String -> Q [Dec]
+cblas_trmv t = cblas (trmv t)
