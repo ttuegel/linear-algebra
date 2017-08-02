@@ -91,6 +91,11 @@ cblas_her2 [t| Double |] "dsyr2"
 cblas_her2 [t| Complex Float |] "cher2"
 cblas_her2 [t| Complex Double |] "zher2"
 
+cblas_hbmv [t| Float |] "ssbmv"
+cblas_hbmv [t| Double |] "dsbmv"
+cblas_hbmv [t| Complex Float |] "chbmv"
+cblas_hbmv [t| Complex Double |] "zhbmv"
+
 class Storable a => Scalar a where
   type RealPart a
 
@@ -173,9 +178,9 @@ class Storable a => Scalar a where
     :: PrimMonad m =>
        a  -- ^ scalar @alpha@
     -> HB n a  -- ^ matrix @A@
-    -> V k a  -- ^ vector @x@
+    -> V n a  -- ^ vector @x@
     -> a  -- ^ scalar @beta@
-    -> Mut (V k) (PrimState m) a  -- ^ vector @y@
+    -> Mut (V n) (PrimState m) a  -- ^ vector @y@
     -> m ()
 
   -- | @y <- alpha A x + beta y@
@@ -314,6 +319,7 @@ instance Scalar Float where
   hemv = ssymv
   her = ssyr
   her2 = ssyr2
+  hbmv = ssbmv
 
 instance Scalar Double where
   type RealPart Double = Double
@@ -334,6 +340,7 @@ instance Scalar Double where
   hemv = dsymv
   her = dsyr
   her2 = dsyr2
+  hbmv = dsbmv
 
 instance Scalar (Complex Float) where
   type RealPart (Complex Float) = Float
@@ -354,6 +361,7 @@ instance Scalar (Complex Float) where
   hemv = chemv
   her = cher
   her2 = cher2
+  hbmv = chbmv
 
 instance Scalar (Complex Double) where
   type RealPart (Complex Double) = Double
@@ -374,3 +382,4 @@ instance Scalar (Complex Double) where
   hemv = zhemv
   her = zher
   her2 = zher2
+  hbmv = zhbmv
