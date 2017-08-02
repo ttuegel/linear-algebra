@@ -44,10 +44,12 @@ library
   other-modules:
       Data.Vector.Blas
       Internal.Blas
+      Internal.Endo
       Internal.Int
       Internal.Matrix
       Internal.Mut
       Internal.TH
       Internal.Vector
+      Internal.Writer
       Paths_openblas
   default-language: Haskell2010
