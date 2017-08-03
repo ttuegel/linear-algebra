@@ -21,10 +21,8 @@ flag use-int64
 library
   hs-source-dirs:
       src/
-  default-extensions: DataKinds DeriveDataTypeable DuplicateRecordFields FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures MultiParamTypeClasses OverloadedStrings RankNTypes RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators
+  default-extensions: DataKinds DeriveDataTypeable DuplicateRecordFields FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators
   ghc-options: -Wall
-  include-dirs:
-      include/
   extra-libraries:
       openblas
   build-depends:

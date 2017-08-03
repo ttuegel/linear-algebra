@@ -6,20 +6,189 @@ module Internal.TH where
 import Control.Monad.Primitive
 import Control.Monad.Trans.Class
 import Data.Complex
-import Data.Monoid (Dual(..))
+import Data.Map (Map)
+import Data.Maybe (fromMaybe)
+import Data.Monoid (Dual(..), Endo(..))
 import Data.Semigroup (Semigroup(..))
+import Foreign.ForeignPtr (withForeignPtr)
 import Foreign.Ptr (Ptr)
 import Foreign.Marshal.Utils (with)
 import Language.Haskell.TH
 
+import qualified Data.Map as Map
+
 import Data.Dim
-import Internal.Endo
 import Internal.Int (I)
 import Internal.Matrix
 import Internal.Mut
 import Internal.Vector
 import Internal.Writer
 
+
+getsUpLo :: Map Name (Q Exp)
+getsUpLo =
+  Map.fromList
+  [ (''GE, nonTriangular ''GE)
+  , (''GB, nonTriangular ''GB)
+  , (''HE, [| \case HE up _ _ _ -> up |])
+  , (''HB, [| \case HB up _ _ _ _ -> up |])
+  , (''HP, [| \case HP up _ _ -> up |])
+  , (''TR, [| \case TR up _ _ _ _ _ -> up |])
+  , (''TB, [| \case TB up _ _ _ _ _ _ -> up |])
+  , (''TP, [| \case TP up _ _ _ _ -> up |])
+  ]
+  where
+    nonTriangular ty =
+      fail ("`" ++ show ty ++ "' is not a triangular or Hermitian matrix type")
+
+getsTrans :: Map Name (Q Exp)
+getsTrans =
+  Map.fromList
+  [ (''GE, [| \case GE tr _ _ _ _ -> tr |])
+  , (''GB, [| \case GB tr _ _ _ _ _ _ -> tr |])
+  , (''HE, hermitian ''HE)
+  , (''HB, hermitian ''HB)
+  , (''HP, hermitian ''HP)
+  , (''TR, [| \case TR _ tr _ _ _ _ -> tr |])
+  , (''TB, [| \case TB _ tr _ _ _ _ _ -> tr |])
+  , (''TP, [| \case TP _ tr _ _ _ -> tr |])
+  ]
+  where
+    hermitian ty =
+      fail ("`" ++ show ty ++ "' is a Hermitian matrix type")
+
+getsDiag :: Map Name (Q Exp)
+getsDiag =
+  Map.fromList
+  [ (''GE, nonTriangular ''GE)
+  , (''GB, nonTriangular ''GB)
+  , (''HE, nonTriangular ''HE)
+  , (''HB, nonTriangular ''HB)
+  , (''HP, nonTriangular ''HP)
+  , (''TR, [| \case TR _ _ d _ _ _ -> d |])
+  , (''TB, [| \case TB _ _ d _ _ _ _ -> d |])
+  , (''TP, [| \case TP _ _ d _ _ -> d |])
+  ]
+  where
+    nonTriangular ty =
+      fail ("`" ++ show ty ++ "' is not a triangular matrix type")
+
+getsDim :: Map Name (Q Exp)
+getsDim =
+  Map.fromList
+  [ (''GE, nonSquare ''GE)
+  , (''GB, nonSquare ''GB)
+  , (''HE, [| \case HE _ n _ _ -> n |])
+  , (''HB, [| \case HB _ _ n _ _ -> n |])
+  , (''HP, [| \case HP _ n _ -> n |])
+  , (''TR, [| \case TR _ _ _ n _ _ -> n |])
+  , (''TB, [| \case TB _ _ _ _ n _ _ -> n |])
+  , (''TP, [| \case TP _ _ _ n _ -> n |])
+  , (''V, [| \case V n _ _ -> n |])
+  ]
+  where
+    nonSquare ty =
+      fail ("`" ++ show ty ++ "' is not a square matrix type")
+
+getsRows :: Map Name (Q Exp)
+getsRows =
+  Map.fromList
+  [ (''GE, [| \case GE _ n _ _ _ -> n |])
+  , (''GB, [| \case GB _ _ n _ _ _ _ -> n |])
+  , (''HE, square ''HE)
+  , (''HB, square ''HB)
+  , (''HP, square ''HP)
+  , (''TR, square ''TR)
+  , (''TB, square ''TB)
+  , (''TP, square ''TP)
+  ]
+  where
+    square ty =
+      fail ("`" ++ show ty ++ "' is a square matrix type")
+
+getsCols :: Map Name (Q Exp)
+getsCols =
+  Map.fromList
+  [ (''GE, [| \case GE _ _ n _ _ -> n |])
+  , (''GB, [| \case GB _ _ _ n _ _ _ -> n |])
+  , (''HE, square ''HE)
+  , (''HB, square ''HB)
+  , (''HP, square ''HP)
+  , (''TR, square ''TR)
+  , (''TB, square ''TB)
+  , (''TP, square ''TP)
+  ]
+  where
+    square ty =
+      fail ("`" ++ show ty ++ "' is a square matrix type")
+
+getsBand :: Map Name (Q Exp)
+getsBand =
+  Map.fromList
+  [ (''GE, nonSquare ''GE)
+  , (''GB, nonSquare ''GB)
+  , (''HE, nonBanded ''HE)
+  , (''HB, [| \case HB _ _ b _ _ -> b |])
+  , (''HP, nonBanded ''HP)
+  , (''TR, nonBanded ''TR)
+  , (''TB, [| \case TB _ _ _ _ b _ _ -> b |])
+  , (''TP, nonBanded ''TP)
+  ]
+  where
+    nonSquare ty =
+      fail ("`" ++ show ty ++ "' is not a square matrix type")
+    nonBanded ty =
+      fail ("`" ++ show ty ++ "' is not a banded matrix type")
+
+getsLower :: Map Name (Q Exp)
+getsLower =
+  Map.fromList
+  [ (''GE, nonBanded ''GE)
+  , (''GB, [| \case GB _ _ _ l _ _ _ -> l |])
+  , (''HE, nonBanded ''HE)
+  , (''HB, square ''HB)
+  , (''HP, nonBanded ''HP)
+  , (''TR, nonBanded ''TR)
+  , (''TB, square ''TB)
+  , (''TP, nonBanded ''TP)
+  ]
+  where
+    square ty =
+      fail ("`" ++ show ty ++ "' is a square matrix type")
+    nonBanded ty =
+      fail ("`" ++ show ty ++ "' is not a banded matrix type")
+
+getsUpper :: Map Name (Q Exp)
+getsUpper =
+  Map.fromList
+  [ (''GE, nonBanded ''GE)
+  , (''GB, [| \case GB _ _ _ _ u _ _ -> u |])
+  , (''HE, nonBanded ''HE)
+  , (''HB, square ''HB)
+  , (''HP, nonBanded ''HP)
+  , (''TR, nonBanded ''TR)
+  , (''TB, square ''TB)
+  , (''TP, nonBanded ''TP)
+  ]
+  where
+    square ty =
+      fail ("`" ++ show ty ++ "' is a square matrix type")
+    nonBanded ty =
+      fail ("`" ++ show ty ++ "' is not a banded matrix type")
+
+getsPtr :: Map Name (Q Exp)
+getsPtr =
+  Map.fromList
+  [ (''GE, [| \case GE _ _ _ p l -> \cont -> cont p l |])
+  , (''GB, [| \case GB _ _ _ _ _ p l -> \cont -> cont p l |])
+  , (''HE, [| \case HE _ _ p l -> \cont -> cont p l |])
+  , (''HB, [| \case HB _ _ _ p l -> \cont -> cont p l |])
+  , (''HP, [| \case HP _ _ p -> \cont -> cont p |])
+  , (''TR, [| \case TR _ _ _ _ p l -> \cont -> cont p l |])
+  , (''TB, [| \case TB _ _ _ _ _ p l -> \cont -> cont p l |])
+  , (''TP, [| \case TP _ _ _ _ p -> \cont -> cont p |])
+  , (''V, [| \case V _ p l -> \cont -> cont p l |])
+  ]
 
 newtype C a = C { getC :: a }
 
@@ -35,18 +204,16 @@ class Build a where
   build :: Monoid (Acc a) => N a -> (M a -> WriterT (Acc a) Q Type) -> Q a
   bind :: String -> WriterT (Acc a) Q (N a)
   order :: WriterT (Acc a) Q ()
-  uplo :: N a -> N a -> WriterT (Acc a) Q ()
-  dim :: N a -> N a -> WriterT (Acc a) Q ()
-  dimVec :: N a -> WriterT (Acc a) Q (D a)
-  dimMutVec :: N a -> WriterT (Acc a) Q (D a)
-  dimGE :: N a -> WriterT (Acc a) Q (D a, D a)
-  dimGB :: N a -> WriterT (Acc a) Q (D a, D a)
-  dimHE :: N a -> WriterT (Acc a) Q (D a)
-  dimHB :: N a -> WriterT (Acc a) Q (D a)
-  dimHP :: N a -> WriterT (Acc a) Q (D a)
-  dimTR :: N a -> WriterT (Acc a) Q (D a)
-  dimTP :: N a -> WriterT (Acc a) Q (D a)
-  dimTB :: N a -> WriterT (Acc a) Q (D a)
+  uplo :: Name -> N a -> WriterT (Acc a) Q ()
+  trans :: Name -> N a -> WriterT (Acc a) Q ()
+  diag :: Name -> N a -> WriterT (Acc a) Q ()
+  dim :: Name -> N a -> WriterT (Acc a) Q (D a)
+  dimMut :: Name -> N a -> WriterT (Acc a) Q (D a)
+  rows :: Name -> N a -> WriterT (Acc a) Q (D a)
+  cols :: Name -> N a -> WriterT (Acc a) Q (D a)
+  band :: Name -> N a -> WriterT (Acc a) Q ()
+  lower :: Name -> N a -> WriterT (Acc a) Q ()
+  upper :: Name -> N a -> WriterT (Acc a) Q ()
   vec :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
   mutVec :: N a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
   scalar :: N a -> Q Type -> WriterT (Acc a) Q ()
@@ -62,11 +229,11 @@ class Build a where
   matTP :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
   matTB :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
 
-tellC :: (Type -> Q Type) -> WriterT (Acc (C Type)) Q ()
-tellC = tell . AccC . Dual . Endo
+tellC :: (Q Type -> Q Type) -> WriterT (Acc (C Type)) Q ()
+tellC = tell . AccC . Endo
 
 instance Build (C Type) where
-  newtype Acc (C Type) = AccC { getType :: Dual (Endo Q Type) }
+  newtype Acc (C Type) = AccC { getType :: Endo (Q Type) }
     deriving (Monoid, Semigroup)
   type M (C Type) = ()
   type D (C Type) = ()
@@ -74,61 +241,54 @@ instance Build (C Type) where
 
   build _ go = do
     (a, finish) <- runWriterT (go ())
-    r <- calling a [t| IO $(pure a) |] [t| Ptr $(pure a) -> IO () |]
-    C <$> (getEndo . getDual . getType) finish r
+    let r = calling a [t| IO $(pure a) |] [t| Ptr $(pure a) -> IO () |]
+    C <$> (appEndo . getType) finish r
 
   bind _ = pure ()
 
-  order = tellC $ \r -> [t| I -> $(pure r) |]
+  order = tellC $ \r -> [t| I -> $r |]
 
-  uplo _ _ = tellC $ \r -> [t| I -> $(pure r) |]
+  uplo _ _ = tellC $ \r -> [t| I -> $r |]
 
-  dim _ _ = tellC $ \r -> [t| I -> $(pure r) |]
+  trans _ _ = tellC $ \r -> [t| I -> $r |]
 
-  dimVec _ = tellC $ \r -> [t| I -> $(pure r) |]
-  dimMutVec = dimVec
+  diag _ _ = tellC $ \r -> [t| I -> $r |]
 
-  dimGE _ = do
-    tellC $ \r -> [t| I -> I -> I -> $(pure r) |]
-    pure ((), ())
+  dim _ _ = tellC $ \r -> [t| I -> $r |]
 
-  dimGB _ = do
-    tellC $ \r -> [t| I -> I -> I -> I -> I -> $(pure r) |]
-    pure ((), ())
+  dimMut = dim
 
-  dimHE _ = tellC $ \r -> [t| I -> I -> $(pure r) |]
+  rows = dim
 
-  dimHB _ = tellC $ \r -> [t| I -> I -> I -> $(pure r) |]
+  cols = dim
 
-  dimHP _ = tellC $ \r -> [t| I -> I -> $(pure r) |]
+  band _ _ = tellC $ \r -> [t| I -> $r |]
 
-  dimTR _ = tellC $ \r -> [t| I -> I -> I -> I -> $(pure r) |]
+  lower = band
 
-  dimTP = dimTR
+  upper = band
 
-  dimTB _ = tellC $ \r -> [t| I -> I -> I -> I -> I -> $(pure r) |]
-
-  vec _ () a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
+  vec _ _ a = tellC $ \r -> [t| Ptr $a -> I -> $r |]
   mutVec e _ = vec e
 
   scalar _ _a = lift _a >>= \_a -> calling _a byValue byRef
     where
-      byValue = tellC $ \r -> [t| $_a -> $(pure r) |]
-      byRef = tellC $ \r -> [t| Ptr $_a -> $(pure r) |]
+      byValue = tellC $ \r -> [t| $_a -> $r |]
+      byRef = tellC $ \r -> [t| Ptr $_a -> $r |]
 
-  matGE _ _ _ a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
+  matGE _ _ _ a = tellC $ \r -> [t| Ptr $a -> I -> $r |]
 
   matMutGE e _ = matGE e
 
   matGB = matGE
 
-  matHE _ _ a = tellC $ \r -> [t| Ptr $a -> I -> $(pure r) |]
+  matHE _ _ a = tellC $ \r -> [t| Ptr $a -> I -> $r |]
 
   matMutHE e _ = matHE e
 
   matHB = matHE
 
-  matHP _ _ a = tellC $ \r -> [t| Ptr $a -> $(pure r) |]
+  matHP _ _ a = tellC $ \r -> [t| Ptr $a -> $r |]
 
   matMutHP e _ = matHP e
 
@@ -138,11 +298,11 @@ instance Build (C Type) where
 
   matTB = matTR
 
-tellHsType :: (Type -> Q Type) -> WriterT (Acc (Hs Type)) Q ()
-tellHsType = tell . AccHsType . Dual . Endo
+tellHsType :: (Q Type -> Q Type) -> WriterT (Acc (Hs Type)) Q ()
+tellHsType = tell . AccHsType . Endo
 
 instance Build (Hs Type) where
-  newtype Acc (Hs Type) = AccHsType { getHsType :: Dual (Endo Q Type) }
+  newtype Acc (Hs Type) = AccHsType { getHsType :: Endo (Q Type) }
     deriving (Monoid, Semigroup)
   type M (Hs Type) = Type
   type D (Hs Type) = Type
@@ -155,8 +315,8 @@ instance Build (Hs Type) where
     let
       tvars = [ KindedTV m (AppT (AppT ArrowT StarT) StarT) ]
       ctx = (:[]) <$> [t| PrimMonad $(pure tv) |]
-    r <- [t| $(pure tv) $(pure a) |]
-    (<$>) Hs $ forallT tvars ctx $ (getEndo . getDual . getHsType) finish r
+      r = [t| $(pure tv) $(pure a) |]
+    (<$>) Hs $ forallT tvars ctx $ (appEndo . getHsType) finish r
 
   bind _ = pure ()
 
@@ -164,415 +324,219 @@ instance Build (Hs Type) where
 
   uplo _ _ = pure ()
 
-  dim _ _ = pure ()
+  trans _ _ = pure ()
 
-  dimVec _ = do
+  diag _ _ = pure ()
+
+  dim _ _ = do
     n <- lift $ newName "n"
     dimk <- lift [t| Dim |]
     let
       tvars = [ KindedTV n dimk ]
       ctx = pure []
-    tellHsType $ \r -> forallT tvars ctx (pure r)
+    tellHsType (forallT tvars ctx)
     lift (varT n)
 
-  dimMutVec = dimVec
+  dimMut = dim
 
-  dimGE _ = do
-    j <- lift $ newName "j"
-    k <- lift $ newName "k"
-    dimk <- lift [t| Dim |]
-    let
-      tvars = [ KindedTV j dimk, KindedTV k dimk ]
-      ctx = pure []
-    tellHsType $ \r -> forallT tvars ctx (pure r)
-    lift $ (,) <$> varT j <*> varT k
+  rows = dim
+  cols = dim
 
-  dimGB = dimGE
+  band _ _ = pure ()
+  lower = band
+  upper = band
 
-  dimHE _ = do
-    n <- lift $ newName "n"
-    dimk <- lift [t| Dim |]
-    let
-      tvars = [ KindedTV n dimk ]
-      ctx = pure []
-    tellHsType $ \r -> forallT tvars ctx (pure r)
-    lift (varT n)
-
-  dimHB = dimHE
-
-  dimHP = dimHE
-
-  dimTR = dimHE
-
-  dimTP = dimTR
-
-  dimTB = dimTR
-
-  vec _ n a = tellHsType $ \r -> [t| V $(pure n) $a -> $(pure r) |]
+  vec _ n a = tellHsType $ \r -> [t| V $(pure n) $a -> $r |]
 
   mutVec _ m n a =
     tellHsType $ \r ->
-      [t| Mut (V $(pure n)) (PrimState $(pure m)) $a -> $(pure r) |]
+      [t| Mut (V $(pure n)) (PrimState $(pure m)) $a -> $r |]
 
-  scalar _ a = tellHsType $ \r -> [t| $a -> $(pure r) |]
+  scalar _ a = tellHsType $ \r -> [t| $a -> $r |]
 
   matGE _ j k a =
-    tellHsType $ \r -> [t| GE $(pure j) $(pure k) $a -> $(pure r) |]
+    tellHsType $ \r -> [t| GE $(pure j) $(pure k) $a -> $r |]
 
   matMutGE _ m j k a =
     tellHsType $ \r ->
-      [t| Mut (GE $(pure j) $(pure k)) (PrimState $(pure m)) $a -> $(pure r) |]
+      [t| Mut (GE $(pure j) $(pure k)) (PrimState $(pure m)) $a -> $r |]
 
   matGB _ j k a =
-    tellHsType $ \r -> [t| GB $(pure j) $(pure k) $a -> $(pure r) |]
+    tellHsType $ \r -> [t| GB $(pure j) $(pure k) $a -> $r |]
 
-  matHE _ n a = tellHsType $ \r -> [t| HE $(pure n) $a -> $(pure r) |]
+  matHE _ n a = tellHsType $ \r -> [t| HE $(pure n) $a -> $r |]
 
   matMutHE _ m n a = tellHsType $ \r ->
-    [t| Mut (HE $(pure n)) (PrimState $(pure m)) $a -> $(pure r) |]
+    [t| Mut (HE $(pure n)) (PrimState $(pure m)) $a -> $r |]
 
-  matHB _ n a = tellHsType $ \r -> [t| HB $(pure n) $a -> $(pure r) |]
+  matHB _ n a = tellHsType $ \r -> [t| HB $(pure n) $a -> $r |]
 
-  matHP _ n a = tellHsType $ \r -> [t| HP $(pure n) $a -> $(pure r) |]
+  matHP _ n a = tellHsType $ \r -> [t| HP $(pure n) $a -> $r |]
 
   matMutHP _ m n a = tellHsType $ \r ->
-    [t| Mut (HP $(pure n)) (PrimState $(pure m)) $a -> $(pure r) |]
+    [t| Mut (HP $(pure n)) (PrimState $(pure m)) $a -> $r |]
 
-  matTR _ n a = tellHsType $ \r -> [t| TR $(pure n) $a -> $(pure r) |]
+  matTR _ n a = tellHsType $ \r -> [t| TR $(pure n) $a -> $r |]
 
-  matTP _ n a = tellHsType $ \r -> [t| TP $(pure n) $a -> $(pure r) |]
+  matTP _ n a = tellHsType $ \r -> [t| TP $(pure n) $a -> $r |]
 
-  matTB _ n a = tellHsType $ \r -> [t| TB $(pure n) $a -> $(pure r) |]
+  matTB _ n a = tellHsType $ \r -> [t| TB $(pure n) $a -> $r |]
+
+tellHsCall :: (Q Exp -> Q Exp) -> WriterT (Acc Exp) Q ()
+tellHsCall = tell . (\f -> mempty { getCall = f }) . Dual . Endo
+
+tellHsBody :: (Q Exp -> Q Exp) -> WriterT (Acc Exp) Q ()
+tellHsBody = tell . (\f -> mempty { getBody = f }) . Endo
+
+tellHsBind :: (Q Exp -> Q Exp) -> WriterT (Acc Exp) Q ()
+tellHsBind = tell . (\f -> mempty { getBind = f }) . Endo
+
+dimWith :: Map Name (Q Exp) -> Name -> Name -> WriterT (Acc Exp) Q ()
+dimWith gets nTy nExp =
+  tellHsCall $ \call ->
+    let
+      notMatrix =
+        fail ("`" ++ show nExp ++ " :: " ++ show nTy ++ "' is not matrix-typed")
+      get = fromMaybe notMatrix (Map.lookup nTy gets)
+      expr = varE nExp
+    in
+      [| $call ($get $expr) |]
+
+getPtrOf :: Name -> Name -> WriterT (Acc Exp) Q ()
+getPtrOf nTy nExp = do
+  p <- lift $ newName "p"
+  i <- lift $ newName "i"
+  let
+    notMatrix =
+      fail ("`" ++ show nTy ++ "' has no pointer")
+    get = fromMaybe notMatrix (Map.lookup nTy getsPtr)
+    expr = varE nExp
+  tellHsCall $ \call -> [| $call $(varE p) $(varE i) |]
+  tellHsBody $ \r ->
+    [| $get $expr $ \fp $(varP i) ->
+        withForeignPtr fp $(lam1E (varP p) r) |]
+
+getPackedPtrOf :: Name -> Name -> WriterT (Acc Exp) Q ()
+getPackedPtrOf nTy nExp = do
+  p <- lift $ newName "p"
+  let
+    notMatrix =
+      fail ("`" ++ show nTy ++ "' has no pointer")
+    get = fromMaybe notMatrix (Map.lookup nTy getsPtr)
+    expr = varE nExp
+  tellHsCall $ \call -> [| $call $(varE p) |]
+  tellHsBody $ \r ->
+    [| $get $expr $ \fp -> withForeignPtr fp $(lam1E (varP p) r) |]
 
 instance Build Exp where
   data Acc Exp
     = AccExp
-    { getCall :: Endo Q Exp
-    , getBody :: Dual (Endo Q Exp)
-    , getBind :: Dual (Endo Q Exp)
+    { getCall :: Dual (Endo (Q Exp))
+    , getBody :: Endo (Q Exp)
+    , getBind :: Endo (Q Exp)
     }
   type M Exp = ()
   type D Exp = ()
   type N Exp = Name
 
-  build call go = do
+  build cnam go = do
     (a, finish) <- runWriterT (go ())
-    _body <- (getEndo . getCall) finish =<< varE call
-    let wrap = calling a pure (\b -> [| alloca $ \z -> $(pure b) z >> peek z |])
-    _body <- wrap _body
-    _body <- (getEndo . getDual . getBody) finish _body
-    _body <- [| unsafePrimToPrim $(pure _body) |]
-    (getEndo . getDual . getBind) finish _body
+    let wrap = calling a id (\_body -> [| alloca $ \z -> $_body z >> peek z |])
+        call = wrap ((appEndo . getDual . getCall) finish (varE cnam))
+        body = (appEndo . getBody) finish call
+    (appEndo . getBind) finish [| unsafePrimToPrim $body |]
 
   bind _nm = do
     _nm <- lift (newName _nm)
-    tell mempty { getBind = (Dual . Endo) $ lam1E (varP _nm) . pure }
+    tell mempty { getBind = Endo $ lam1E (varP _nm) }
     pure _nm
 
-  order = tell mempty { getCall = Endo $ \call -> [| $(pure call) 102 |] }
+  order = tellHsCall $ \call -> [| $call 102 |]
 
-  uplo nE nP =
-    tell mempty
-    { getCall = Endo $ \call -> do
-        up <- newName "up"
-        let body = [| $(pure call) $(varE up) |]
-        caseE (varE nE) [ match (conP nP [varP up]) (normalB body) [] ]
-    }
+  uplo nTy nExp = tellHsCall $ \call ->
+    let
+      notMatrix =
+        fail ("`" ++ show nExp ++ " :: " ++ show nTy ++ "' is not matrix-typed")
+      get = fromMaybe notMatrix (Map.lookup nTy getsUpLo)
+      expr = varE nExp
+    in
+      [| $call (uploToI ($get $expr)) |]
 
-  dim nE nP =
-    tell mempty
-    { getCall = Endo $ \call -> do
-        n <- newName "n"
-        let body = [| $(pure call) $(varE n) |]
-        caseE (varE nE) [ match (conP nP [varP n]) (normalB body) [] ]
-    }
+  trans nTy nExp = tellHsCall $ \call ->
+    let
+      notMatrix =
+        fail ("`" ++ show nExp ++ " :: " ++ show nTy ++ "' is not matrix-typed")
+      get = fromMaybe notMatrix (Map.lookup nTy getsTrans)
+      expr = varE nExp
+    in
+      [| $call (transToI ($get $expr)) |]
 
-  dimVec v = do
-    nn <- lift $ newName "nn"
-    tell mempty
-      { getCall = Endo $ \call -> [| $(pure call) $(varE nn) |]
-      , getBody = (Dual . Endo) $ \r ->
-          [| unsafeWithV $(varE v) $(lamE [varP nn, wildP, wildP] (pure r)) |]
-      }
+  diag nTy nExp = tellHsCall $ \call ->
+    let
+      notMatrix =
+        fail ("`" ++ show nExp ++ " :: " ++ show nTy ++ "' is not matrix-typed")
+      get = fromMaybe notMatrix (Map.lookup nTy getsDiag)
+      expr = varE nExp
+    in
+      [| $call (diagToI ($get $expr)) |]
 
-  dimMutVec v = do
-    nn <- lift $ newName "nn"
-    tell mempty
-      { getCall = Endo $ \call -> [| $(pure call) $(varE nn) |]
-      , getBody = (Dual . Endo) $ \r ->
-          [| withV $(varE v) $(lamE [varP nn, wildP, wildP] (pure r)) |]
-      }
+  dim = dimWith getsDim
 
-  dimGE m = do
-    t <- lift (newName "t")
-    r <- lift (newName "r")
-    c <- lift (newName "c")
-    tell mempty
-      { getCall = Endo $ \call ->
-          [| $(pure call) (transToI $(varE t)) $(varE r) $(varE c) |]
-      , getBody = (Dual . Endo) $ \rest ->
-          [| unsafeWithGE $(varE m)
-             $(lamE [varP t, varP r, varP c, wildP, wildP] (pure rest)) |]
-      }
-    pure ((), ())
+  dimMut nTy nExp = do
+    v <- lift (newName "v")
+    tellHsBody $ \r -> [| case $(varE nExp) of Mut $(varP v) -> $r |]
+    dim nTy v
 
-  dimGB m = do
-    t <- lift (newName "t")
-    r <- lift (newName "r")
-    c <- lift (newName "c")
-    kl <- lift (newName "kl")
-    ku <- lift (newName "ku")
-    tell mempty
-      { getCall = Endo $ \call ->
-          [| $(pure call)
-             (transToI $(varE t)) $(varE r) $(varE c)
-             $(varE kl) $(varE ku) |]
-      , getBody = (Dual . Endo) $ \rest ->
-          let binds = [varP t, varP r, varP c, varP kl, varP ku, wildP, wildP] in
-            [| unsafeWithGB $(varE m) $(lamE binds (pure rest)) |]
-      }
-    pure ((), ())
+  rows = dimWith getsRows
 
-  dimHE v = do
-    uplo <- lift $ newName "uplo"
-    nn <- lift $ newName "nn"
-    tell mempty
-      { getCall = Endo $ \call ->
-          [| $(pure call) (uploToI $(varE uplo)) $(varE nn) |]
-      , getBody = (Dual . Endo) $ \r ->
-          let binds = [varP uplo, varP nn, wildP, wildP] in
-            [| unsafeWithHE $(varE v) $(lamE binds (pure r)) |]
-      }
+  cols = dimWith getsCols
 
-  dimHB v = do
-    uplo <- lift $ newName "uplo"
-    nn <- lift $ newName "nn"
-    k <- lift $ newName "k"
-    tell mempty
-      { getCall = Endo $ \call ->
-          [| $(pure call) (uploToI $(varE uplo)) $(varE nn) $(varE k) |]
-      , getBody = (Dual . Endo) $ \r ->
-          let binds = [varP uplo, varP nn, varP k, wildP, wildP] in
-            [| unsafeWithHB $(varE v) $(lamE binds (pure r)) |]
-      }
+  band = dimWith getsBand
+  lower = dimWith getsLower
+  upper = dimWith getsUpper
 
-  dimHP v = do
-    uplo <- lift $ newName "uplo"
-    nn <- lift $ newName "nn"
-    tell mempty
-      { getCall = Endo $ \call ->
-          [| $(pure call) (uploToI $(varE uplo)) $(varE nn) |]
-      , getBody = (Dual . Endo) $ \r ->
-          let binds = [varP uplo, varP nn, wildP] in
-            [| unsafeWithHP $(varE v) $(lamE binds (pure r)) |]
-      }
+  vec v _ _ = getPtrOf ''V v
 
-  dimTR v = do
-    uplo <- lift $ newName "uplo"
-    trans <- lift $ newName "trans"
-    diag <- lift $ newName "diag"
-    nn <- lift $ newName "nn"
-    tell mempty
-      { getCall = Endo $ \call ->
-          [| $(pure call)
-             (uploToI $(varE uplo))
-             (transToI $(varE trans))
-             (diagToI $(varE diag))
-             $(varE nn) |]
-      , getBody = (Dual . Endo) $ \r ->
-          let binds = [ varP uplo
-                      , varP trans
-                      , varP diag
-                      , varP nn
-                      , wildP
-                      , wildP
-                      ]
-          in
-            [| unsafeWithTR $(varE v) $(lamE binds (pure r)) |]
-      }
-
-  dimTP v = do
-    uplo <- lift $ newName "uplo"
-    trans <- lift $ newName "trans"
-    diag <- lift $ newName "diag"
-    nn <- lift $ newName "nn"
-    tell mempty
-      { getCall = Endo $ \call ->
-          [| $(pure call)
-             (uploToI $(varE uplo))
-             (transToI $(varE trans))
-             (diagToI $(varE diag))
-             $(varE nn) |]
-      , getBody = (Dual . Endo) $ \r ->
-          let binds = [ varP uplo
-                      , varP trans
-                      , varP diag
-                      , varP nn
-                      , wildP
-                      ]
-          in
-            [| unsafeWithTP $(varE v) $(lamE binds (pure r)) |]
-      }
-
-  dimTB v = do
-    uplo <- lift $ newName "uplo"
-    trans <- lift $ newName "trans"
-    diag <- lift $ newName "diag"
-    nn <- lift $ newName "nn"
-    k <- lift $ newName "k"
-    tell mempty
-      { getCall = Endo $ \call ->
-          [| $(pure call)
-             (uploToI $(varE uplo))
-             (transToI $(varE trans))
-             (diagToI $(varE diag))
-             $(varE nn) $(varE k) |]
-      , getBody = (Dual . Endo) $ \r ->
-          let binds = [ varP uplo
-                      , varP trans
-                      , varP diag
-                      , varP nn
-                      , varP k
-                      , wildP
-                      , wildP
-                      ]
-          in
-            [| unsafeWithTB $(varE v) $(lamE binds (pure r)) |]
-      }
-
-  vec v _ _ = do
-    p <- lift $ newName "p"
-    i <- lift $ newName "i"
-    tell mempty
-          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE i) |]
-          , getBody = (Dual . Endo) $ \r ->
-              [| unsafeWithV $(varE v)
-                 $(lamE [wildP, varP p, varP i] (pure r)) |]
-          }
-
-  mutVec v _ _ _ = do
-    p <- lift $ newName "p"
-    i <- lift $ newName "i"
-    tell mempty
-          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE i) |]
-          , getBody = (Dual . Endo) $ \r ->
-              [| withV $(varE v) $(lamE [wildP, varP p, varP i] (pure r)) |]
-          }
+  mutVec v _ n a = do
+    m <- lift (newName "m")
+    tellHsBody $ \r -> [| case $(varE v) of Mut $(varP m) -> $r |]
+    vec m n a
 
   scalar s a = do
     z <- lift $ newName "z"
-    tell mempty
-      { getCall = Endo $ \call -> [| $(pure call) $(varE z) |]
-      , getBody = (Dual . Endo) $ \r ->
-          [| $(withE =<< a) $(varE s) $(lam1E (varP z) (pure r)) |]
-      }
+    tellHsCall $ \call -> [| $call $(varE z) |]
+    tellHsBody $ \r -> [| $(withE =<< a) $(varE s) $(lam1E (varP z) r) |]
 
-  matGE gb _ _ _ = do
-    p <- lift (newName "p")
-    ld <- lift (newName "ld")
-    tell mempty
-          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
-          , getBody = (Dual . Endo) $ \r ->
-              [| unsafeWithGB $(pure gb)
-                 $(lamE [wildP, wildP, wildP, varP p, varP ld] (pure r)) |]
-          }
+  matGE ge _ _ _ = getPtrOf ''GE ge
 
-  matMutGE ge _ _ _ _ = do
-    p <- lift (newName "p")
-    ld <- lift (newName "ld")
-    tell mempty
-          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
-          , getBody = (Dual . Endo) $ \r ->
-              let binds = [wildP, wildP, wildP, varP p, varP ld] in
-                [| withGE $(varE ge) $(lamE binds (pure r)) |]
-          }
+  matMutGE ge _ j k a = do
+    m <- lift (newName "m")
+    tellHsBody $ \r -> [| case $(varE ge) of Mut $(varP m) -> $r |]
+    matGE m j k a
 
-  matGB gb _ _ _ = do
-    p <- lift (newName "p")
-    ld <- lift (newName "ld")
-    tell mempty
-          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
-          , getBody = (Dual . Endo) $ \r ->
-              let binds = [wildP, wildP, wildP, wildP, wildP, varP p, varP ld] in
-                [| unsafeWithGB $(varE gb) $(lamE binds (pure r)) |]
-          }
+  matGB gb _ _ _ = getPtrOf ''GB gb
 
-  matHE he _ _ = do
-    p <- lift (newName "p")
-    ld <- lift (newName "ld")
-    tell mempty
-          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
-          , getBody = (Dual . Endo) $ \r ->
-              let binds = [wildP, wildP, varP p, varP ld] in
-                [| unsafeWithHE $(varE he) $(lamE binds (pure r)) |]
-          }
+  matHE he _ _ = getPtrOf ''HE he
 
-  matMutHE he _ _ _ = do
-    p <- lift (newName "p")
-    ld <- lift (newName "ld")
-    tell mempty
-          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
-          , getBody = (Dual . Endo) $ \r ->
-              let binds = [wildP, wildP, varP p, varP ld] in
-                [| withHE $(varE he) $(lamE binds (pure r)) |]
-          }
+  matMutHE he _ n a = do
+    m <- lift (newName "m")
+    tellHsBody $ \r -> [| case $(varE he) of Mut $(varP m) -> $r |]
+    matHE m n a
 
-  matHB hb _ _ = do
-    p <- lift (newName "p")
-    ld <- lift (newName "ld")
-    tell mempty
-          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
-          , getBody = (Dual . Endo) $ \r ->
-              let binds = [wildP, wildP, wildP, varP p, varP ld] in
-                [| unsafeWithHB $(varE hb) $(lamE binds (pure r)) |]
-          }
+  matHB hb _ _ = getPtrOf ''HB hb
 
-  matHP hp _ _ = do
-    p <- lift (newName "p")
-    tell mempty
-          { getCall = Endo $ \call -> [| $(pure call) $(varE p) |]
-          , getBody = (Dual . Endo) $ \r ->
-              let binds = [wildP, wildP, varP p] in
-                [| unsafeWithHP $(varE hp) $(lamE binds (pure r)) |]
-          }
+  matHP hp _ _ = getPackedPtrOf ''HP hp
 
-  matMutHP hp _ _ _ = do
-    p <- lift (newName "p")
-    tell mempty
-          { getCall = Endo $ \call -> [| $(pure call) $(varE p) |]
-          , getBody = (Dual . Endo) $ \r ->
-              let binds = [wildP, wildP, varP p] in
-                [| withHP $(varE hp) $(lamE binds (pure r)) |]
-          }
+  matMutHP hp _ n a = do
+    m <- lift (newName "m")
+    tellHsBody $ \r -> [| case $(varE hp) of Mut $(varP m) -> $r |]
+    matHP m n a
 
-  matTR tr _ _ = do
-    p <- lift (newName "p")
-    ld <- lift (newName "ld")
-    tell mempty
-          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
-          , getBody = (Dual . Endo) $ \r ->
-              let binds = [wildP, wildP, wildP, wildP, varP p, varP ld] in
-                [| unsafeWithTR $(varE tr) $(lamE binds (pure r)) |]
-          }
+  matTR tr _ _ = getPtrOf ''TR tr
 
-  matTP tr _ _ = do
-    p <- lift (newName "p")
-    tell mempty
-          { getCall = Endo $ \call -> [| $(pure call) $(varE p) |]
-          , getBody = (Dual . Endo) $ \r ->
-              let binds = [wildP, wildP, wildP, wildP, varP p] in
-                [| unsafeWithTP $(varE tr) $(lamE binds (pure r)) |]
-          }
+  matTP tp _ _ = getPackedPtrOf ''TP tp
 
-  matTB tr _ _ = do
-    p <- lift (newName "p")
-    ld <- lift (newName "ld")
-    tell mempty
-          { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
-          , getBody = (Dual . Endo) $ \r ->
-              let binds = [wildP, wildP, wildP, wildP, wildP, varP p, varP ld] in
-                [| unsafeWithTB $(varE tr) $(lamE binds (pure r)) |]
-          }
+  matTB tb _ _ = getPtrOf ''TB tb
 
 instance Semigroup (Acc Exp) where
   (<>) a b =
@@ -585,6 +549,65 @@ instance Semigroup (Acc Exp) where
 instance Monoid (Acc Exp) where
   mempty = AccExp { getCall = mempty, getBody = mempty, getBind = mempty }
   mappend = (<>)
+
+dimGE :: Build a => N a -> WriterT (Acc a) Q (D a, D a)
+dimGE m = do
+  trans ''GE m
+  (,) <$> rows ''GE m <*> cols ''GE m
+
+dimGB :: Build a => N a -> WriterT (Acc a) Q (D a, D a)
+dimGB m = do
+  trans ''GB m
+  n <- (,) <$> rows ''GB m <*> cols ''GB m
+  lower ''GB m
+  upper ''GB m
+  pure n
+
+dimHE :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimHE v = do
+  uplo ''HE v
+  dim ''HE v
+
+dimHB :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimHB v = do
+  uplo ''HB v
+  n <- dim ''HB v
+  band ''HB v
+  pure n
+
+dimHP :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimHP v = do
+  uplo ''HP v
+  dim ''HP v
+
+dimTR :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimTR v = do
+  uplo ''TR v
+  trans ''TR v
+  diag ''TR v
+  dim ''TR v
+
+dimTB :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimTB v = do
+  uplo ''TB v
+  trans ''TB v
+  diag ''TB v
+  n <- dim ''TB v
+  band ''TB v
+  pure n
+
+dimTP :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimTP v = do
+  uplo ''TP v
+  trans ''TP v
+  diag ''TP v
+  dim ''TP v
+
+dimVec :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimVec = dim ''V
+
+dimMutVec :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimMutVec = dimMut ''V
 
 withE :: Type -> Q Exp
 withE a = calling a [| flip ($) |] [| with |]
@@ -624,7 +647,7 @@ dot :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
 dot t _ = do
   x <- bind "x"
   y <- bind "y"
-  n <- dimVec x
+  n <- dim ''V x
   vec x n t
   vec y n t
   lift t
@@ -632,7 +655,7 @@ dot t _ = do
 asum :: Build a => Q Type -> Q Type -> M a -> WriterT (Acc a) Q Type
 asum r t _ = do
   x <- bind "x"
-  n <- dimVec x
+  n <- dim ''V x
   vec x n t
   lift r
 

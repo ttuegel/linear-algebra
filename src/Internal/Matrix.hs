@@ -16,11 +16,6 @@ uploToI Lower = 122
 
 data Diag = NonUnit | Unit
 
-instance Enum Diag where
-  toEnum 131 = NonUnit
-  toEnum 132 = Unit
-  toEnum x = error ("CblasDiag: illegal value `" ++ show x ++ "'")
-
 diagToI :: Diag -> I
 diagToI NonUnit = 131
 diagToI Unit = 132

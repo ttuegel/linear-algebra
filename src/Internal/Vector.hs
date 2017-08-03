@@ -23,6 +23,15 @@ data V (n :: Dim) a
     {-# UNPACK #-} !(ForeignPtr a)
     {-# UNPACK #-} !I
 
+class Vec v where
+  dimV :: v a -> I
+
+instance Vec v => Vec (Mut v s) where
+  dimV (Mut v) = dimV v
+
+instance Vec (V n) where
+  dimV (V n _ _) = n
+
 type instance Mutable (V n) = Mut (V n)
 
 instance Storable a => MVector (Mut (V n)) a where
