@@ -2,15 +2,26 @@
 
 module Internal.Int where
 
-#ifdef OPENBLAS_USE64BITINT
+#ifdef INT
+
+#if INT == "int64_t"
+
 import Data.Int (Int64)
-#else
+
+type I = Int64
+
+#elif INT == "int32_t"
+
 import Data.Int (Int32)
+
+type I = Int32
+
 #endif
 
-
-#ifdef OPENBLAS_USE64BITINT
-type I = Int64
 #else
+
+import Data.Int (Int32)
+
 type I = Int32
+
 #endif

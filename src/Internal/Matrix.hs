@@ -10,9 +10,22 @@ import Internal.Mut
 
 data UpLo = Upper | Lower
 
-data Diag = Unit | NonUnit
+uploToI :: UpLo -> I
+uploToI Upper = 121
+uploToI Lower = 122
+
+data Diag = NonUnit | Unit
+
+diagToI :: Diag -> I
+diagToI NonUnit = 131
+diagToI Unit = 132
 
 data Trans = NoTrans | Trans | ConjTrans
+
+transToI :: Trans -> I
+transToI NoTrans = 111
+transToI Trans = 112
+transToI ConjTrans = 113
 
 data GE (m :: Dim) (n :: Dim) a
   = GE !Trans

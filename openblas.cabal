@@ -13,15 +13,15 @@ source-repository head
   type: git
   location: https://github.com/ttuegel/openblas
 
-flag use-64bit-int
-  description: Set if your BLAS library uses 64-bit integer indices. (The traditional interface uses 32-bit integers even on 64-bit architectures.)
+flag use-int64
+  description: Use 64-bit integers in the BLAS library interface. Traditionally, BLAS uses 32-bit integers, even on 64-bit platforms. Modern BLAS implementations may support 64-bit integers instead.
   manual: True
   default: False
 
 library
   hs-source-dirs:
       src/
-  default-extensions: DataKinds DeriveDataTypeable DuplicateRecordFields FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures MultiParamTypeClasses OverloadedStrings RankNTypes RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators
+  default-extensions: DataKinds DeriveDataTypeable DuplicateRecordFields FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators
   ghc-options: -Wall
   extra-libraries:
       openblas
@@ -32,19 +32,22 @@ library
     , parsers
     , primitive
     , template-haskell
+    , transformers
     , vector
-  if flag(use-64bit-int)
-    cpp-options: -DOPENBLAS_USE64BITINT
+  if flag(use-int64)
+    cpp-options: -DINT=int64_t
   exposed-modules:
       Data.Dim
       Data.Int.Blas
   other-modules:
       Data.Vector.Blas
       Internal.Blas
+      Internal.Endo
       Internal.Int
       Internal.Matrix
       Internal.Mut
+      Internal.TH
       Internal.Vector
-      Language.C.Inline.Context.Blas
+      Internal.Writer
       Paths_openblas
   default-language: Haskell2010

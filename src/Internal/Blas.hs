@@ -5,68 +5,164 @@ module Internal.Blas where
 
 import Control.Monad.Primitive
 import Data.Complex
-import Data.Monoid ((<>))
+import Foreign.C.Types (CSize(..))
 import Foreign.Marshal.Alloc (alloca)
-import Foreign.Marshal.Utils (with)
 import Foreign.Storable (Storable, peek)
-import Language.C.Inline.Context (baseCtx)
 import Prelude hiding (length)
-import System.IO.Unsafe (unsafePerformIO)
 
-import qualified Data.Vector.Generic as V
-import qualified Language.C.Inline as C
-
-import Internal.Int
 import Internal.Matrix
 import Internal.Mut
+import Internal.TH
 import Internal.Vector
-import Language.C.Inline.Context.Blas
 
-C.context (baseCtx <> blasCtx)
-C.include "<cblas.h>"
-C.include "<f77blas.h>"
+cblas_dot [t| Float |] "sdot"
+cblas_dot [t| Double |] "ddot"
+cblas_dot [t| Complex Float |] "cdot"
+cblas_dot [t| Complex Double |] "zdot"
 
+cblas_asum [t| Float |] [t| Float |] "snrm2"
+cblas_asum [t| Float |] [t| Float |] "sasum"
+cblas_asum [t| CSize |] [t| Float |] "isamax"
+
+cblas_asum [t| Double |] [t| Double |] "dnrm2"
+cblas_asum [t| Double |] [t| Double |] "dasum"
+cblas_asum [t| CSize |] [t| Double |] "idamax"
+
+cblas_asum [t| Float |] [t| Complex Float |] "scnrm2"
+cblas_asum [t| Float |] [t| Complex Float |] "scasum"
+cblas_asum [t| CSize |] [t| Complex Float |] "icamax"
+
+cblas_asum [t| Double |] [t| Complex Double |] "dznrm2"
+cblas_asum [t| Double |] [t| Complex Double |] "dzasum"
+cblas_asum [t| CSize |] [t| Complex Double |] "izamax"
+
+cblas_swap [t| Float |] "sswap"
+cblas_swap [t| Double |] "dswap"
+cblas_swap [t| Complex Float |] "cswap"
+cblas_swap [t| Complex Double |] "zswap"
+
+cblas_copy [t| Float |] "scopy"
+cblas_copy [t| Double |] "dcopy"
+cblas_copy [t| Complex Float |] "ccopy"
+cblas_copy [t| Complex Double |] "zcopy"
+
+cblas_axpy [t| Float |] "saxpy"
+cblas_axpy [t| Double |] "daxpy"
+cblas_axpy [t| Complex Float |] "caxpy"
+cblas_axpy [t| Complex Double |] "zaxpy"
+
+cblas_scal [t| Float |] [t| Float |] "sscal"
+cblas_scal [t| Double |] [t| Double |] "dscal"
+cblas_scal [t| Complex Float |] [t| Complex Float |] "cscal"
+cblas_scal [t| Complex Double |] [t| Complex Double |] "zscal"
+cblas_scal [t| Float |] [t| Complex Float |] "csscal"
+cblas_scal [t| Double |] [t| Complex Double |] "zdscal"
+
+cblas_gemv [t| Float |] "sgemv"
+cblas_gemv [t| Double |] "dgemv"
+cblas_gemv [t| Complex Float |] "cgemv"
+cblas_gemv [t| Complex Double |] "zgemv"
+
+cblas_ger [t| Float |] "sger"
+cblas_ger [t| Double |] "dger"
+cblas_ger [t| Complex Float |] "cgeru"
+cblas_ger [t| Complex Float |] "cgerc"
+cblas_ger [t| Complex Double |] "zgeru"
+cblas_ger [t| Complex Double |] "zgerc"
+
+cblas_gbmv [t| Float |] "sgbmv"
+cblas_gbmv [t| Double |] "dgbmv"
+cblas_gbmv [t| Complex Float |] "cgbmv"
+cblas_gbmv [t| Complex Double |] "zgbmv"
+
+cblas_hemv [t| Float |] "ssymv"
+cblas_hemv [t| Double |] "dsymv"
+cblas_hemv [t| Complex Float |] "chemv"
+cblas_hemv [t| Complex Double |] "zhemv"
+
+cblas_her [t| Float |] [t| Float |] "ssyr"
+cblas_her [t| Double |] [t| Double |] "dsyr"
+cblas_her [t| Float |] [t| Complex Float |] "cher"
+cblas_her [t| Double |] [t| Complex Double |] "zher"
+
+cblas_her2 [t| Float |] "ssyr2"
+cblas_her2 [t| Double |] "dsyr2"
+cblas_her2 [t| Complex Float |] "cher2"
+cblas_her2 [t| Complex Double |] "zher2"
+
+cblas_hbmv [t| Float |] "ssbmv"
+cblas_hbmv [t| Double |] "dsbmv"
+cblas_hbmv [t| Complex Float |] "chbmv"
+cblas_hbmv [t| Complex Double |] "zhbmv"
+
+cblas_hpmv [t| Float |] "sspmv"
+cblas_hpmv [t| Double |] "dspmv"
+cblas_hpmv [t| Complex Float |] "chpmv"
+cblas_hpmv [t| Complex Double |] "zhpmv"
+
+cblas_hpr [t| Float |] [t| Float |] "sspr"
+cblas_hpr [t| Double |] [t| Double |] "dspr"
+cblas_hpr [t| Float |] [t| Complex Float |] "chpr"
+cblas_hpr [t| Double |] [t| Complex Double |] "zhpr"
+
+cblas_hpr2 [t| Float |] "sspr2"
+cblas_hpr2 [t| Double |] "dspr2"
+cblas_hpr2 [t| Complex Float |] "chpr2"
+cblas_hpr2 [t| Complex Double |] "zhpr2"
+
+cblas_trmv [t| Float |] "strmv"
+cblas_trmv [t| Double |] "dtrmv"
+cblas_trmv [t| Complex Float |] "ctrmv"
+cblas_trmv [t| Complex Double |] "ztrmv"
+
+cblas_trmv [t| Float |] "strsv"
+cblas_trmv [t| Double |] "dtrsv"
+cblas_trmv [t| Complex Float |] "ctrsv"
+cblas_trmv [t| Complex Double |] "ztrsv"
+
+cblas_tpmv [t| Float |] "stpmv"
+cblas_tpmv [t| Double |] "dtpmv"
+cblas_tpmv [t| Complex Float |] "ctpmv"
+cblas_tpmv [t| Complex Double |] "ztpmv"
+
+cblas_tpmv [t| Float |] "stpsv"
+cblas_tpmv [t| Double |] "dtpsv"
+cblas_tpmv [t| Complex Float |] "ctpsv"
+cblas_tpmv [t| Complex Double |] "ztpsv"
+
+cblas_tbmv [t| Float |] "stbmv"
+cblas_tbmv [t| Double |] "dtbmv"
+cblas_tbmv [t| Complex Float |] "ctbmv"
+cblas_tbmv [t| Complex Double |] "ztbmv"
+
+cblas_tbmv [t| Float |] "stbsv"
+cblas_tbmv [t| Double |] "dtbsv"
+cblas_tbmv [t| Complex Float |] "ctbsv"
+cblas_tbmv [t| Complex Double |] "ztbsv"
 
 class Storable a => Scalar a where
   type RealPart a
 
   -- | Unconjugated inner (dot) product, @x^T x@.
-  dotu :: V n a -> V n a -> a
+  dotu :: PrimMonad m => V n a -> V n a -> m a
 
   -- | Conjugated inner (dot) product, @x^H x@.
-  dotc :: V n a -> V n a -> a
+  dotc :: PrimMonad m => V n a -> V n a -> m a
 
   -- | The sum of the real modulus of each element of the vector,
   -- @sum . map magnitude@.
-  asum :: V n a -> RealPart a
+  asum :: PrimMonad m => V n a -> m (RealPart a)
 
   -- | The Euclidean norm of the vector,
   -- @sqrt . sum . map (\x -> realPart (conjugate x * x))@
-  nrm2 :: V n a -> RealPart a
+  nrm2 :: PrimMonad m => V n a -> m (RealPart a)
 
   -- | The index of the element of the vector with the largest real
   -- modulus.
-  iamax :: V n a -> I
-  amax :: V n a -> RealPart a
-
-  -- | The index of the element of the vector with the smallest real
-  -- modulus.
-  iamin :: V n a -> I
-  amin :: V n a -> RealPart a
-
-  max :: V n a -> RealPart a
-  min :: V n a -> RealPart a
+  iamax :: PrimMonad m => V n a -> m CSize
 
   -- | @y <- a x + y@
   axpy
-    :: PrimMonad m =>
-       a  -- ^ scalar @a@
-    -> V n a  -- ^ vector @x@
-    -> Mut (V n) (PrimState m) a  -- ^ vector @y@
-    -> m ()
-
-  -- | @y <- a conj(x) + y@
-  axpyc
     :: PrimMonad m =>
        a  -- ^ scalar @a@
     -> V n a  -- ^ vector @x@
@@ -126,9 +222,9 @@ class Storable a => Scalar a where
     :: PrimMonad m =>
        a  -- ^ scalar @alpha@
     -> HB n a  -- ^ matrix @A@
-    -> V k a  -- ^ vector @x@
+    -> V n a  -- ^ vector @x@
     -> a  -- ^ scalar @beta@
-    -> Mut (V k) (PrimState m) a  -- ^ vector @y@
+    -> Mut (V n) (PrimState m) a  -- ^ vector @y@
     -> m ()
 
   -- | @y <- alpha A x + beta y@
@@ -136,9 +232,9 @@ class Storable a => Scalar a where
     :: PrimMonad m =>
        a
     -> HE n a
-    -> V k a
+    -> V n a
     -> a
-    -> Mut (V k) (PrimState m) a
+    -> Mut (V n) (PrimState m) a
     -> m ()
 
   -- | @y <- alpha A x + beta y@
@@ -146,30 +242,30 @@ class Storable a => Scalar a where
     :: PrimMonad m =>
        a
     -> HP n a
-    -> V k a
+    -> V n a
     -> a
-    -> Mut (V k) (PrimState m) a
+    -> Mut (V n) (PrimState m) a
     -> m ()
 
   -- | @y <- alpha A x + beta y@
   tbmv
     :: PrimMonad m =>
        TB n a
-    -> Mut (V k) (PrimState m) a
+    -> Mut (V n) (PrimState m) a
     -> m ()
 
   -- | @y <- alpha A x + beta y@
   tpmv
     :: PrimMonad m =>
        TP n a
-    -> Mut (V k) (PrimState m) a
+    -> Mut (V n) (PrimState m) a
     -> m ()
 
   -- | @y <- alpha A x + beta y@
   trmv
     :: PrimMonad m =>
        TR n a
-    -> Mut (V k) (PrimState m) a
+    -> Mut (V n) (PrimState m) a
     -> m ()
 
   -- | Compute the solution of a system of linear equations,
@@ -177,7 +273,7 @@ class Storable a => Scalar a where
   tbsv
     :: PrimMonad m =>
        TB n a
-    -> Mut (V k) (PrimState m) a
+    -> Mut (V n) (PrimState m) a
     -> m ()
 
   -- | Compute the solution of a system of linear equations,
@@ -185,7 +281,7 @@ class Storable a => Scalar a where
   tpsv
     :: PrimMonad m =>
        TP n a
-    -> Mut (V k) (PrimState m) a
+    -> Mut (V n) (PrimState m) a
     -> m ()
 
   -- | Compute the solution of a system of linear equations,
@@ -193,7 +289,7 @@ class Storable a => Scalar a where
   trsv
     :: PrimMonad m =>
        TR n a
-    -> Mut (V k) (PrimState m) a
+    -> Mut (V n) (PrimState m) a
     -> m ()
 
   -- | @A <- alpha x y^T + A@
@@ -247,1241 +343,123 @@ class Storable a => Scalar a where
     -> V n a
     -> Mut (HP n) (PrimState m) a
     -> m ()
+
+instance Scalar Float where
+  type RealPart Float = Float
+  dotu = sdot
+  dotc = sdot
+  asum = sasum
+  nrm2 = snrm2
+  iamax = isamax
+  axpy = saxpy
+  scal = sscal
+  rscal = sscal
+  copy = scopy
+  swap = sswap
+  gemv = sgemv
+  geru = sger
+  gerc = sger
+  gbmv = sgbmv
+  hemv = ssymv
+  her = ssyr
+  her2 = ssyr2
+  hbmv = ssbmv
+  hpmv = sspmv
+  hpr = sspr
+  hpr2 = sspr2
+  trmv = strmv
+  trsv = strsv
+  tpmv = stpmv
+  tpsv = stpsv
+  tbmv = stbmv
+  tbsv = stbsv
+
 instance Scalar Double where
   type RealPart Double = Double
+  dotu = ddot
+  dotc = ddot
+  asum = dasum
+  nrm2 = dnrm2
+  iamax = idamax
+  axpy = daxpy
+  scal = dscal
+  rscal = dscal
+  copy = dcopy
+  swap = dswap
+  gemv = dgemv
+  geru = dger
+  gerc = dger
+  gbmv = dgbmv
+  hemv = dsymv
+  her = dsyr
+  her2 = dsyr2
+  hbmv = dsbmv
+  hpmv = dspmv
+  hpr = dspr
+  hpr2 = dspr2
+  trmv = dtrmv
+  trsv = dtrsv
+  tpmv = dtpmv
+  tpsv = dtpsv
+  tbmv = dtbmv
+  tbsv = dtbsv
 
-  dotu x y =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptrx incx ->
-    unsafeWithV y $ \_ ptry incy ->
-      [C.exp|
-        double {
-          BLASFUNC(ddot)
-          ( &$(blasint n)
-          , $(double* ptrx)
-          , &$(blasint incx)
-          , $(double* ptry)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  dotc = dotu
-
-  asum x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dasum)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  iamax x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        blasint {
-          BLASFUNC(idamax)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  amax x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(damax)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  iamin x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        blasint {
-          BLASFUNC(idamin)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  amin x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(damin)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  max x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dmax)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  min x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dmin)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  nrm2 x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dnrm2)
-          ( &$(blasint n)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  axpy a x y =
-    unsafePrimToPrim $
-    unsafeWithV x $ \n ptrx incx ->
-    withV y $ \_ ptry incy ->
-      [C.block|
-        void {
-          BLASFUNC(daxpy)
-          ( &$(blasint n)
-          , &$(double a)
-          , $(double* ptrx)
-          , &$(blasint incx)
-          , $(double* ptry)
-          , &$(blasint incy)
-          );
-        }
-      |]
-
-  axpyc = axpy
-
-  scal a x =
-    unsafePrimToPrim $
-    withV x $ \n ptr inc ->
-      [C.exp|
-        void {
-          BLASFUNC(dscal)
-          ( &$(blasint n)
-          , &$(double a)
-          , $(double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  rscal = scal
-
-  copy x y =
-    unsafePrimToPrim $
-    unsafeWithV x $ \n ptrx incx ->
-    withV y $ \_ ptry incy ->
-      [C.exp|
-        void {
-          BLASFUNC(dcopy)
-          ( &$(blasint n)
-          , $(double* ptrx)
-          , &$(blasint incx)
-          , $(double* ptry)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  swap x y =
-    unsafePrimToPrim $
-    withV x $ \n ptrx incx ->
-    withV y $ \_ ptry incy ->
-      [C.exp|
-        void {
-          BLASFUNC(dswap)
-          ( &$(blasint n)
-          , $(double* ptrx)
-          , &$(blasint incx)
-          , $(double* ptry)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  gbmv alpha a x beta y =
-    unsafePrimToPrim $
-    unsafeWithGB a $ \trans m n kl ku pa lda ->
-    unsafeWithV x $ \_ px incx ->
-    withV y $ \_ py incy ->
-      [C.block|
-        void {
-          BLASFUN(dgbmv)
-          ( $trans:trans
-          , &$(blasint m)
-          , &$(blasint n)
-          , &$(blasint kl)
-          , &$(blasint ku)
-          , &$(double alpha)
-          , $(double* pa)
-          , &$(blasint lda)
-          , $(double* px)
-          , &$(blasint incx)
-          , &$(double beta)
-          , $(double* py)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  gemv alpha a x beta y =
-    unsafePrimToPrim $
-    unsafeWithGE a $ \trans m n pa lda ->
-    unsafeWithV x $ \_ px incx ->
-    withV y $ \_ py incy ->
-      [C.block|
-        void {
-          BLASFUN(dgemv)
-          ( $trans:trans
-          , &$(blasint m)
-          , &$(blasint n)
-          , $(double alpha)
-          , $(double* pa)
-          , &$(blasint lda)
-          , $(double *px)
-          , &$(blasint incx)
-          , $(double beta)
-          , $(double* py)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  hbmv alpha a x beta y =
-    unsafePrimToPrim $
-    unsafeWithHB a $ \uplo nn kk pa lda ->
-    unsafeWithV x $ \_ px incx ->
-    withV y $ \_ py incy ->
-      [C.block|
-        void {
-          BLASFUN(dsbmv)
-          ( $uplo:uplo
-          , &$(blasint nn)
-          , &$(blasint kk)
-          , $(double alpha)
-          , $(double* pa)
-          , &$(blasint lda)
-          , $(double* px)
-          , &$(blasint incx)
-          , $(double beta)
-          , $(double* py)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  hemv alpha a x beta y =
-    unsafePrimToPrim $
-    unsafeWithHE a $ \uplo nn pa lda ->
-    unsafeWithV x $ \_ px incx ->
-    withV y $ \_ py incy ->
-      [C.block|
-        void {
-          BLASFUN(dsymv)
-          ( $uplo:uplo
-          , &$(blasint nn)
-          , $(double alpha)
-          , $(double* pa)
-          , &$(blasint lda)
-          , $(double* px)
-          , &$(blasint incx)
-          , $(double beta)
-          , $(double* py)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  hpmv alpha a x beta y =
-    unsafePrimToPrim $
-    unsafeWithHP a $ \uplo nn pa ->
-    unsafeWithV x $ \_ px incx ->
-    withV y $ \_ py incy ->
-      [C.block|
-        void {
-          BLASFUN(dspmv)
-          ( $uplo:uplo
-          , &$(blasint nn)
-          , $(double alpha)
-          , $(double* pa)
-          , $(double* px)
-          , &$(blasint incx)
-          , $(double beta)
-          , $(double* py)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  tbmv a x =
-    unsafePrimToPrim $
-    unsafeWithTB a $ \uplo trans diag nn kk pa lda ->
-    withV x $ \_ px incx ->
-      [C.block|
-        void {
-          BLASFUN(dtbmv)
-          ( $uplo:uplo
-          , $trans:trans
-          , $diag:diag
-          , &$(blasint nn)
-          , &$(blasint kk)
-          , $(double* pa)
-          , &$(blasint lda)
-          , $(double* px)
-          , &$(blasint incx)
-          )
-        }
-      |]
-
-  tpmv a x =
-    unsafePrimToPrim $
-    unsafeWithTP a $ \uplo trans diag nn pa ->
-    withV x $ \_ px incx ->
-      [C.block|
-        void {
-          BLASFUN(dtpmv)
-          ( $uplo:uplo
-          , $trans:trans
-          , $diag:diag
-          , &$(blasint nn)
-          , $(double* pa)
-          , $(double* px)
-          , &$(blasint incx)
-          )
-        }
-      |]
-
-  trmv a x =
-    unsafePrimToPrim $
-    unsafeWithTR a $ \uplo trans diag nn pa lda ->
-    withV x $ \_ px incx ->
-      [C.block|
-        void {
-          BLASFUN(dtrmv)
-          ( $uplo:uplo
-          , $trans:trans
-          , $diag:diag
-          , &$(blasint nn)
-          , $(double* pa)
-          , &$(blasint lda)
-          , $(double* px)
-          , &$(blasint incx)
-          )
-        }
-      |]
-
-  tbsv a x =
-    unsafePrimToPrim $
-    unsafeWithTB a $ \uplo trans diag nn kk pa lda ->
-    withV x $ \_ px incx ->
-      [C.block|
-        void {
-          BLASFUN(dtbsv)
-          ( $uplo:uplo
-          , $trans:trans
-          , $diag:diag
-          , &$(blasint nn)
-          , &$(blasint kk)
-          , $(double* pa)
-          , &$(blasint lda)
-          , $(double* px)
-          , &$(blasint incx)
-          )
-        }
-      |]
-
-  tpsv a x =
-    unsafePrimToPrim $
-    unsafeWithTP a $ \uplo trans diag nn pa ->
-    withV x $ \_ px incx ->
-      [C.block|
-        void {
-          BLASFUN(dtpsv)
-          ( $uplo:uplo
-          , $trans:trans
-          , $diag:diag
-          , &$(blasint nn)
-          , $(double* pa)
-          , $(double* px)
-          , &$(blasint incx)
-          )
-        }
-      |]
-
-  trsv a x =
-    unsafePrimToPrim $
-    unsafeWithTR a $ \uplo trans diag nn pa lda ->
-    withV x $ \_ px incx ->
-      [C.block|
-        void {
-          BLASFUN(dtrsv)
-          ( $uplo:uplo
-          , $trans:trans
-          , $diag:diag
-          , &$(blasint nn)
-          , $(double* pa)
-          , &$(blasint lda)
-          , $(double* px)
-          , &$(blasint incx)
-          )
-        }
-      |]
-
-  geru alpha x y a =
-    unsafePrimToPrim $
-    unsafeWithV x $ \_ px incx ->
-    unsafeWithV y $ \_ py incy ->
-    withGE a $ \trans nr nc pa lda ->
-      case trans of
-        NoTrans ->
-          [C.block|
-            void {
-              BLASFUNC(dger)
-              ( &$(blasint nr)
-              , &$(blasint nc)
-              , $(double alpha)
-              , $(double* px)
-              , &$(blasint incx)
-              , $(double* py)
-              , &$(blasint incy)
-              , $(double* pa)
-              , &$(blasint lda)
-              )
-            }
-          |]
-        _ ->
-          [C.block|
-            void {
-              BLASFUNC(dger)
-              ( &$(blasint nr)
-              , &$(blasint nc)
-              , $(double alpha)
-              , $(double* py)
-              , &$(blasint incy)
-              , $(double* px)
-              , &$(blasint incx)
-              , $(double* pa)
-              , &$(blasint lda)
-              )
-            }
-          |]
-
-  gerc = geru
-
-  her alpha x a =
-    unsafePrimToPrim $
-    unsafeWithV x $ \_ px incx ->
-    withHE a $ \uplo nn pa lda ->
-      [C.block|
-        void {
-          BLASFUN(dsyr)
-          ( $uplo:uplo
-          , &$(blasint nn)
-          , $(double alpha)
-          , $(double* px)
-          , &$(blasint incx)
-          , $(double* pa)
-          , &$(blasint lda)
-          )
-        }
-      |]
-
-  her2 alpha x y a =
-    unsafePrimToPrim $
-    unsafeWithV x $ \_ px incx ->
-    unsafeWithV y $ \_ py incy ->
-    withHE a $ \uplo nn pa lda ->
-      [C.block|
-        void {
-          BLASFUN(dsyr2)
-          ( $uplo:uplo
-          , &$(blasint nn)
-          , $(double alpha)
-          , $(double* px)
-          , &$(blasint incx)
-          , $(double* py)
-          , &$(blasint incy)
-          , $(double* pa)
-          , &$(blasint lda)
-          )
-        }
-      |]
-
-  hpr alpha x a =
-    unsafePrimToPrim $
-    unsafeWithV x $ \_ px incx ->
-    withHP a $ \uplo nn pa ->
-      [C.block|
-        void {
-          BLASFUN(dhpr)
-          ( $uplo:uplo
-          , &$(blasint nn)
-          , $(double alpha)
-          , $(double* px)
-          , &$(blasint incx)
-          , $(double* pa)
-          )
-        }
-      |]
-
-  hpr2 alpha x y a =
-    unsafePrimToPrim $
-    unsafeWithV x $ \_ px incx ->
-    unsafeWithV y $ \_ py incy ->
-    withHP a $ \uplo nn pa ->
-      [C.block|
-        void {
-          BLASFUN(dhpr2)
-          ( $uplo:uplo
-          , &$(blasint nn)
-          , $(double alpha)
-          , $(double* px)
-          , &$(blasint incx)
-          , $(double* py)
-          , &$(blasint incy)
-          , $(double* pa)
-          )
-        }
-      |]
-
+instance Scalar (Complex Float) where
+  type RealPart (Complex Float) = Float
+  dotu = cdot
+  dotc = cdot
+  asum = scasum
+  nrm2 = scnrm2
+  iamax = icamax
+  axpy = caxpy
+  scal = cscal
+  rscal = csscal
+  copy = ccopy
+  swap = cswap
+  gemv = cgemv
+  geru = cgeru
+  gerc = cgerc
+  gbmv = cgbmv
+  hemv = chemv
+  her = cher
+  her2 = cher2
+  hbmv = chbmv
+  hpmv = chpmv
+  hpr = chpr
+  hpr2 = chpr2
+  trmv = ctrmv
+  trsv = ctrsv
+  tpmv = ctpmv
+  tpsv = ctpsv
+  tbmv = ctbmv
+  tbsv = ctbsv
 
 instance Scalar (Complex Double) where
   type RealPart (Complex Double) = Double
-
-  dotu x y =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptrx incx ->
-    unsafeWithV y $ \_ ptry incy ->
-    alloca $ \z -> do
-      [C.block|
-        void {
-          #ifdef RETURN_BY_STACK
-          BLASFUNC(zdotu)
-          ( $(openblas_complex_double* z)
-          , &$(blasint n)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          )
-          #else
-          *$(openblas_complex_double* z) =
-          BLASFUNC(zdotu)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          );
-          #endif
-        }
-      |]
-      peek z
-
-  dotc x y =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptrx incx ->
-    unsafeWithV y $ \_ ptry incy ->
-    alloca $ \z -> do
-      [C.block|
-        void {
-          #ifdef RETURN_BY_STACK
-          BLASFUNC(zdotc)
-          ( $(openblas_complex_double* z)
-          , &$(blasint n)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          )
-          #else
-          *$(openblas_complex_double* z) =
-          BLASFUNC(zdotc)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          );
-          #endif
-        }
-      |]
-      peek z
-
-  asum x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dzasum)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  iamax x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        blasint {
-          BLASFUNC(izamax)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  amax x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dzamax)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  iamin x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        blasint {
-          BLASFUNC(izamin)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  amin x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dzamin)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  max x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dzmax)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  min x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dzmin)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  nrm2 x =
-    unsafePerformIO $
-    unsafeWithV x $ \n ptr inc ->
-      [C.exp|
-        double {
-          BLASFUNC(dznrm2)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          )
-        }
-      |]
-
-  axpy a x y =
-    unsafePrimToPrim $
-    unsafeWithV x $ \n ptrx incx ->
-    withV y $ \_ ptry incy ->
-    with a $ \pa ->
-      [C.block|
-        void {
-          BLASFUNC(zaxpy)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* pa)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          );
-        }
-      |]
-
-  axpyc a x y =
-    unsafePrimToPrim $
-    unsafeWithV x $ \n ptrx incx ->
-    withV y $ \_ ptry incy ->
-    with a $ \pa ->
-      [C.block|
-        void {
-          BLASFUNC(zaxpyc)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* pa)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          );
-        }
-      |]
-
-  scal a x =
-    unsafePrimToPrim $
-    withV x $ \n ptr inc ->
-    with a $ \pa ->
-      [C.block|
-        void {
-          BLASFUNC(zscal)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* pa)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          );
-        }
-      |]
-
-  rscal a x =
-    unsafePrimToPrim $
-    withV x $ \n ptr inc ->
-    with a $ \pa ->
-      [C.block|
-        void {
-          BLASFUNC(zdscal)
-          ( &$(blasint n)
-          , $(double* pa)
-          , (double*)$(openblas_complex_double* ptr)
-          , &$(blasint inc)
-          );
-        }
-      |]
-
-  copy x y =
-    unsafePrimToPrim $
-    unsafeWithV x $ \n ptrx incx ->
-    withV y $ \_ ptry incy ->
-      [C.exp|
-        void {
-          BLASFUNC(zcopy)
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  swap x y =
-    unsafePrimToPrim $
-    withV x $ \n ptrx incx ->
-    withV y $ \_ ptry incy ->
-      [C.exp|
-        void {
-          cblas_zswap
-          ( &$(blasint n)
-          , (double*)$(openblas_complex_double* ptrx)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* ptry)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  gbmv alpha a x beta y =
-    unsafePrimToPrim $
-    with alpha $ \palpha ->
-    unsafeWithGB a $ \trans m n kl ku pa lda ->
-    unsafeWithV x $ \_ px incx ->
-    with beta $ \pbeta ->
-    withV y $ \_ py incy ->
-      [C.block|
-        void {
-          BLASFUN(zgbmv)
-          ( $trans:trans
-          , &$(blasint m)
-          , &$(blasint n)
-          , &$(blasint kl)
-          , &$(blasint ku)
-          , (double*)$(openblas_complex_double* palpha)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* pbeta)
-          , (double*)$(openblas_complex_double* py)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  gemv alpha a x beta y =
-    unsafePrimToPrim $
-    with alpha $ \palpha ->
-    unsafeWithGE a $ \trans m n pa lda ->
-    unsafeWithV x $ \_ px incx ->
-    with beta $ \pbeta ->
-    withV y $ \_ py incy ->
-      [C.block|
-        void {
-          BLASFUN(zgemv)
-          ( $trans:trans
-          , &$(blasint m)
-          , &$(blasint n)
-          , (double*)$(openblas_complex_double* palpha)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* pbeta)
-          , (double*)$(openblas_complex_double* py)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  hbmv alpha a x beta y =
-    unsafePrimToPrim $
-    with alpha $ \palpha ->
-    unsafeWithHB a $ \uplo nn kk pa lda ->
-    unsafeWithV x $ \_ px incx ->
-    with beta $ \pbeta ->
-    withV y $ \_ py incy ->
-      [C.block|
-        void {
-          BLASFUN(zhbmv)
-          ( $uplo:uplo
-          , &$(blasint nn)
-          , &$(blasint kk)
-          , (double*)$(openblas_complex_double* palpha)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* pbeta)
-          , (double*)$(openblas_complex_double* py)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  hemv alpha a x beta y =
-    unsafePrimToPrim $
-    with alpha $ \palpha ->
-    unsafeWithHE a $ \uplo nn pa lda ->
-    unsafeWithV x $ \_ px incx ->
-    with beta $ \pbeta ->
-    withV y $ \_ py incy ->
-      [C.block|
-        void {
-          BLASFUN(zhemv)
-          ( $uplo:uplo
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* palpha)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* pbeta)
-          , (double*)$(openblas_complex_double* py)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  hpmv alpha a x beta y =
-    unsafePrimToPrim $
-    with alpha $ \palpha ->
-    unsafeWithHP a $ \uplo nn pa ->
-    unsafeWithV x $ \_ px incx ->
-    with beta $ \pbeta ->
-    withV y $ \_ py incy ->
-      [C.block|
-        void {
-          BLASFUN(zhpmv)
-          ( $uplo:uplo
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* palpha)
-          , (double*)$(openblas_complex_double* pa)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* pbeta)
-          , (double*)$(openblas_complex_double* py)
-          , &$(blasint incy)
-          )
-        }
-      |]
-
-  tbmv a x =
-    unsafePrimToPrim $
-    unsafeWithTB a $ \uplo trans diag nn kk pa lda ->
-    withV x $ \_ px incx ->
-      [C.block|
-        void {
-          BLASFUN(ztbmv)
-          ( $uplo:uplo
-          , $trans:trans
-          , $diag:diag
-          , &$(blasint nn)
-          , &$(blasint kk)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          )
-        }
-      |]
-
-  tpmv a x =
-    unsafePrimToPrim $
-    unsafeWithTP a $ \uplo trans diag nn pa ->
-    withV x $ \_ px incx ->
-      [C.block|
-        void {
-          BLASFUN(ztpmv)
-          ( $uplo:uplo
-          , $trans:trans
-          , $diag:diag
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* pa)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          )
-        }
-      |]
-
-  trmv a x =
-    unsafePrimToPrim $
-    unsafeWithTR a $ \uplo trans diag nn pa lda ->
-    withV x $ \_ px incx ->
-      [C.block|
-        void {
-          BLASFUN(ztrmv)
-          ( $uplo:uplo
-          , $trans:trans
-          , $diag:diag
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          )
-        }
-      |]
-
-  tbsv a x =
-    unsafePrimToPrim $
-    unsafeWithTB a $ \uplo trans diag nn kk pa lda ->
-    withV x $ \_ px incx ->
-      [C.block|
-        void {
-          BLASFUN(ztbsv)
-          ( $uplo:uplo
-          , $trans:trans
-          , $diag:diag
-          , &$(blasint nn)
-          , &$(blasint kk)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          )
-        }
-      |]
-
-  tpsv a x =
-    unsafePrimToPrim $
-    unsafeWithTP a $ \uplo trans diag nn pa ->
-    withV x $ \_ px incx ->
-      [C.block|
-        void {
-          BLASFUN(ztpsv)
-          ( $uplo:uplo
-          , $trans:trans
-          , $diag:diag
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* pa)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          )
-        }
-      |]
-
-  trsv a x =
-    unsafePrimToPrim $
-    unsafeWithTR a $ \uplo trans diag nn pa lda ->
-    withV x $ \_ px incx ->
-      [C.block|
-        void {
-          BLASFUN(ztrsv)
-          ( $uplo:uplo
-          , $trans:trans
-          , $diag:diag
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          )
-        }
-      |]
-
-  geru alpha x y a =
-    unsafePrimToPrim $
-    unsafeWithV x $ \_ px incx ->
-    withGE a $ \trans nr nc pa lda ->
-      case trans of
-        NoTrans ->
-          with alpha $ \palpha ->
-          unsafeWithV y $ \_ py incy ->
-            [C.block|
-              void {
-                BLASFUNC(zgeru)
-                ( &$(blasint nr)
-                , &$(blasint nc)
-                , (double*)$(openblas_complex_double* palpha)
-                , (double*)$(openblas_complex_double* px)
-                , &$(blasint incx)
-                , (double*)$(openblas_complex_double* py)
-                , &$(blasint incy)
-                , (double*)$(openblas_complex_double* pa)
-                , &$(blasint lda)
-                )
-              }
-            |]
-        Trans ->
-          with alpha $ \palpha ->
-          unsafeWithV y $ \_ py incy ->
-            [C.block|
-              void {
-                BLASFUNC(zgeru)
-                ( &$(blasint nr)
-                , &$(blasint nc)
-                , (double*)$(openblas_complex_double* palpha)
-                , (double*)$(openblas_complex_double* py)
-                , &$(blasint incy)
-                , (double*)$(openblas_complex_double* px)
-                , &$(blasint incx)
-                , (double*)$(openblas_complex_double* pa)
-                , &$(blasint lda)
-                )
-              }
-            |]
-        ConjTrans ->
-          with (conjugate alpha) $ \palpha ->
-          unsafeWithV (V.map conjugate y) $ \_ py incy ->
-            [C.block|
-              void {
-                BLASFUNC(zgerc)
-                ( &$(blasint nr)
-                , &$(blasint nc)
-                , (double*)$(openblas_complex_double* palpha)
-                , (double*)$(openblas_complex_double* py)
-                , &$(blasint incy)
-                , (double*)$(openblas_complex_double* px)
-                , &$(blasint incx)
-                , (double*)$(openblas_complex_double* pa)
-                , &$(blasint lda)
-                )
-              }
-            |]
-
-  gerc alpha x y a =
-    unsafePrimToPrim $
-    unsafeWithV x $ \_ px incx ->
-    withGE a $ \trans nr nc pa lda ->
-      case trans of
-        NoTrans ->
-          with alpha $ \palpha ->
-          unsafeWithV y $ \_ py incy ->
-            [C.block|
-              void {
-                BLASFUNC(zgerc)
-                ( &$(blasint nr)
-                , &$(blasint nc)
-                , (double*)$(openblas_complex_double* palpha)
-                , (double*)$(openblas_complex_double* px)
-                , &$(blasint incx)
-                , (double*)$(openblas_complex_double* py)
-                , &$(blasint incy)
-                , (double*)$(openblas_complex_double* pa)
-                , &$(blasint lda)
-                )
-              }
-            |]
-        Trans ->
-          with alpha $ \palpha ->
-          unsafeWithV (V.map conjugate y) $ \_ py incy ->
-            [C.block|
-              void {
-                BLASFUNC(zgeru)
-                ( &$(blasint nr)
-                , &$(blasint nc)
-                , (double*)$(openblas_complex_double* palpha)
-                , (double*)$(openblas_complex_double* py)
-                , &$(blasint incy)
-                , (double*)$(openblas_complex_double* px)
-                , &$(blasint incx)
-                , (double*)$(openblas_complex_double* pa)
-                , &$(blasint lda)
-                )
-              }
-            |]
-        ConjTrans ->
-          with (conjugate alpha) $ \palpha ->
-          unsafeWithV y $ \_ py incy ->
-            [C.block|
-              void {
-                BLASFUNC(zgerc)
-                ( &$(blasint nr)
-                , &$(blasint nc)
-                , (double*)$(openblas_complex_double* palpha)
-                , (double*)$(openblas_complex_double* py)
-                , &$(blasint incy)
-                , (double*)$(openblas_complex_double* px)
-                , &$(blasint incx)
-                , (double*)$(openblas_complex_double* pa)
-                , &$(blasint lda)
-                )
-              }
-            |]
-
-  her alpha x a =
-    unsafePrimToPrim $
-    unsafeWithV x $ \_ px incx ->
-    withHE a $ \uplo nn pa lda ->
-      [C.block|
-        void {
-          BLASFUN(zher)
-          ( $uplo:uplo
-          , &$(blasint nn)
-          , $(double alpha)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          )
-        }
-      |]
-
-  her2 alpha x y a =
-    unsafePrimToPrim $
-    with alpha $ \palpha ->
-    unsafeWithV x $ \_ px incx ->
-    unsafeWithV y $ \_ py incy ->
-    withHE a $ \uplo nn pa lda ->
-      [C.block|
-        void {
-          BLASFUN(zher2)
-          ( $uplo:uplo
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* palpha)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* py)
-          , &$(blasint incy)
-          , (double*)$(openblas_complex_double* pa)
-          , &$(blasint lda)
-          )
-        }
-      |]
-
-  hpr alpha x a =
-    unsafePrimToPrim $
-    unsafeWithV x $ \_ px incx ->
-    withHP a $ \uplo nn pa ->
-      [C.block|
-        void {
-          BLASFUN(zhpr)
-          ( $uplo:uplo
-          , &$(blasint nn)
-          , $(double alpha)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* pa)
-          )
-        }
-      |]
-
-  hpr2 alpha x y a =
-    unsafePrimToPrim $
-    with alpha $ \palpha ->
-    unsafeWithV x $ \_ px incx ->
-    unsafeWithV y $ \_ py incy ->
-    withHP a $ \uplo nn pa ->
-      [C.block|
-        void {
-          BLASFUN(zhpr2)
-          ( $uplo:uplo
-          , &$(blasint nn)
-          , (double*)$(openblas_complex_double* palpha)
-          , (double*)$(openblas_complex_double* px)
-          , &$(blasint incx)
-          , (double*)$(openblas_complex_double* py)
-          , &$(blasint incy)
-          , (double*)$(openblas_complex_double* pa)
-          )
-        }
-      |]
+  dotu = zdot
+  dotc = zdot
+  asum = dzasum
+  nrm2 = dznrm2
+  iamax = izamax
+  axpy = zaxpy
+  scal = zscal
+  rscal = zdscal
+  copy = zcopy
+  swap = zswap
+  gemv = zgemv
+  geru = zgeru
+  gerc = zgerc
+  gbmv = zgbmv
+  hemv = zhemv
+  her = zher
+  her2 = zher2
+  hbmv = zhbmv
+  hpmv = zhpmv
+  hpr = zhpr
+  hpr2 = zhpr2
+  trmv = ztrmv
+  trsv = ztrsv
+  tpmv = ztpmv
+  tpsv = ztpsv
+  tbmv = ztbmv
+  tbsv = ztbsv
