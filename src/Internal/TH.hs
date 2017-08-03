@@ -190,6 +190,19 @@ getsPtr =
   , (''V, [| \case V _ p l -> \cont -> cont p l |])
   ]
 
+isPacked :: Map Name Bool
+isPacked =
+  Map.fromList
+  [ (''GE, False)
+  , (''GB, False)
+  , (''HE, False)
+  , (''HB, False)
+  , (''HP, True)
+  , (''TR, False)
+  , (''TB, False)
+  , (''TP, True)
+  ]
+
 newtype C a = C { getC :: a }
 
 newtype Hs a = Hs { getHs :: a }
@@ -217,17 +230,10 @@ class Build a where
   vec :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
   mutVec :: N a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
   scalar :: N a -> Q Type -> WriterT (Acc a) Q ()
-  matGE :: N a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matMutGE :: N a -> M a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matGB :: N a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matHE :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matMutHE :: N a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matHB :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matHP :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matMutHP :: N a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matTR :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matTP :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matTB :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  mat :: Name -> N a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  mutMat :: Name -> N a -> M a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  sqMat :: Name -> N a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  mutSqMat :: Name -> N a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
 
 tellC :: (Q Type -> Q Type) -> WriterT (Acc (C Type)) Q ()
 tellC = tell . AccC . Endo
@@ -276,27 +282,23 @@ instance Build (C Type) where
       byValue = tellC $ \r -> [t| $_a -> $r |]
       byRef = tellC $ \r -> [t| Ptr $_a -> $r |]
 
-  matGE _ _ _ a = tellC $ \r -> [t| Ptr $a -> I -> $r |]
+  mat nTy _ _ _ a = do
+    let notMatrix = fail ("`" ++ show nTy ++ "' is not a matrix type")
+    packed <- maybe notMatrix pure (Map.lookup nTy isPacked)
+    if packed
+      then tellC $ \r -> [t| Ptr $a -> $r |]
+      else tellC $ \r -> [t| Ptr $a -> I -> $r |]
 
-  matMutGE e _ = matGE e
+  mutMat nTy e _ = mat nTy e
 
-  matGB = matGE
+  sqMat nTy _ _ a = do
+    let notMatrix = fail ("`" ++ show nTy ++ "' is not a matrix type")
+    packed <- maybe notMatrix pure (Map.lookup nTy isPacked)
+    if packed
+      then tellC $ \r -> [t| Ptr $a -> $r |]
+      else tellC $ \r -> [t| Ptr $a -> I -> $r |]
 
-  matHE _ _ a = tellC $ \r -> [t| Ptr $a -> I -> $r |]
-
-  matMutHE e _ = matHE e
-
-  matHB = matHE
-
-  matHP _ _ a = tellC $ \r -> [t| Ptr $a -> $r |]
-
-  matMutHP e _ = matHP e
-
-  matTR = matHE
-
-  matTP = matHP
-
-  matTB = matTR
+  mutSqMat nTy e _ = sqMat nTy e
 
 tellHsType :: (Q Type -> Q Type) -> WriterT (Acc (Hs Type)) Q ()
 tellHsType = tell . AccHsType . Endo
@@ -354,33 +356,17 @@ instance Build (Hs Type) where
 
   scalar _ a = tellHsType $ \r -> [t| $a -> $r |]
 
-  matGE _ j k a =
-    tellHsType $ \r -> [t| GE $(pure j) $(pure k) $a -> $r |]
+  mat n _ j k a =
+    tellHsType $ \r -> [t| $(conT n) $(pure j) $(pure k) $a -> $r |]
 
-  matMutGE _ m j k a =
+  mutMat n _ m j k a =
     tellHsType $ \r ->
-      [t| Mut (GE $(pure j) $(pure k)) (PrimState $(pure m)) $a -> $r |]
+      [t| Mut ($(conT n) $(pure j) $(pure k)) (PrimState $(pure m)) $a -> $r |]
 
-  matGB _ j k a =
-    tellHsType $ \r -> [t| GB $(pure j) $(pure k) $a -> $r |]
+  sqMat nTy _ n a = tellHsType $ \r -> [t| $(conT nTy) $(pure n) $a -> $r |]
 
-  matHE _ n a = tellHsType $ \r -> [t| HE $(pure n) $a -> $r |]
-
-  matMutHE _ m n a = tellHsType $ \r ->
-    [t| Mut (HE $(pure n)) (PrimState $(pure m)) $a -> $r |]
-
-  matHB _ n a = tellHsType $ \r -> [t| HB $(pure n) $a -> $r |]
-
-  matHP _ n a = tellHsType $ \r -> [t| HP $(pure n) $a -> $r |]
-
-  matMutHP _ m n a = tellHsType $ \r ->
-    [t| Mut (HP $(pure n)) (PrimState $(pure m)) $a -> $r |]
-
-  matTR _ n a = tellHsType $ \r -> [t| TR $(pure n) $a -> $r |]
-
-  matTP _ n a = tellHsType $ \r -> [t| TP $(pure n) $a -> $r |]
-
-  matTB _ n a = tellHsType $ \r -> [t| TB $(pure n) $a -> $r |]
+  mutSqMat nTy _ m n a = tellHsType $ \r ->
+    [t| Mut ($(conT nTy) $(pure n)) (PrimState $(pure m)) $a -> $r |]
 
 tellHsCall :: (Q Exp -> Q Exp) -> WriterT (Acc Exp) Q ()
 tellHsCall = tell . (\f -> mempty { getCall = f }) . Dual . Endo
@@ -404,29 +390,26 @@ dimWith gets nTy nExp =
 
 getPtrOf :: Name -> Name -> WriterT (Acc Exp) Q ()
 getPtrOf nTy nExp = do
-  p <- lift $ newName "p"
-  i <- lift $ newName "i"
   let
-    notMatrix =
-      fail ("`" ++ show nTy ++ "' has no pointer")
+    notMatrix :: Q a
+    notMatrix = fail ("`" ++ show nTy ++ "' has no pointer")
     get = fromMaybe notMatrix (Map.lookup nTy getsPtr)
     expr = varE nExp
-  tellHsCall $ \call -> [| $call $(varE p) $(varE i) |]
-  tellHsBody $ \r ->
-    [| $get $expr $ \fp $(varP i) ->
-        withForeignPtr fp $(lam1E (varP p) r) |]
-
-getPackedPtrOf :: Name -> Name -> WriterT (Acc Exp) Q ()
-getPackedPtrOf nTy nExp = do
-  p <- lift $ newName "p"
-  let
-    notMatrix =
-      fail ("`" ++ show nTy ++ "' has no pointer")
-    get = fromMaybe notMatrix (Map.lookup nTy getsPtr)
-    expr = varE nExp
-  tellHsCall $ \call -> [| $call $(varE p) |]
-  tellHsBody $ \r ->
-    [| $get $expr $ \fp -> withForeignPtr fp $(lam1E (varP p) r) |]
+  packed <- pure $ fromMaybe False (Map.lookup nTy isPacked)
+  if packed
+    then do
+      p <- lift $ newName "p"
+      tellHsCall $ \call -> [| $call $(varE p) |]
+      tellHsBody $ \r ->
+        [| $get $expr $ \fp ->
+            withForeignPtr fp $(lam1E (varP p) r) |]
+    else do
+      p <- lift $ newName "p"
+      i <- lift $ newName "i"
+      tellHsCall $ \call -> [| $call $(varE p) $(varE i) |]
+      tellHsBody $ \r ->
+        [| $get $expr $ \fp $(varP i) ->
+            withForeignPtr fp $(lam1E (varP p) r) |]
 
 instance Build Exp where
   data Acc Exp
@@ -507,36 +490,16 @@ instance Build Exp where
     tellHsCall $ \call -> [| $call $(varE z) |]
     tellHsBody $ \r -> [| $(withE =<< a) $(varE s) $(lam1E (varP z) r) |]
 
-  matGE ge _ _ _ = getPtrOf ''GE ge
+  mat nTy nExp _ _ _ = getPtrOf nTy nExp
 
-  matMutGE ge _ j k a = do
+  mutMat nTy nExp _ j k a = do
     m <- lift (newName "m")
-    tellHsBody $ \r -> [| case $(varE ge) of Mut $(varP m) -> $r |]
-    matGE m j k a
+    tellHsBody $ \r -> [| case $(varE nExp) of Mut $(varP m) -> $r |]
+    mat nTy m j k a
 
-  matGB gb _ _ _ = getPtrOf ''GB gb
+  sqMat nTy nExp n a = mat nTy nExp n n a
 
-  matHE he _ _ = getPtrOf ''HE he
-
-  matMutHE he _ n a = do
-    m <- lift (newName "m")
-    tellHsBody $ \r -> [| case $(varE he) of Mut $(varP m) -> $r |]
-    matHE m n a
-
-  matHB hb _ _ = getPtrOf ''HB hb
-
-  matHP hp _ _ = getPackedPtrOf ''HP hp
-
-  matMutHP hp _ n a = do
-    m <- lift (newName "m")
-    tellHsBody $ \r -> [| case $(varE hp) of Mut $(varP m) -> $r |]
-    matHP m n a
-
-  matTR tr _ _ = getPtrOf ''TR tr
-
-  matTP tp _ _ = getPackedPtrOf ''TP tp
-
-  matTB tb _ _ = getPtrOf ''TB tb
+  mutSqMat nTy nExp m n a = mutMat nTy nExp m n n a
 
 instance Semigroup (Acc Exp) where
   (<>) a b =
@@ -710,7 +673,7 @@ gemv t m = do
   order
   (r, c) <- dimGE a
   scalar alpha t
-  matGE a r c t
+  mat ''GE a r c t
   vec x c t
   scalar beta t
   mutVec y m r t
@@ -728,7 +691,7 @@ ger t m = do
   scalar alpha t
   vec x j t
   vec y k t
-  matMutGE a m j k t
+  mutMat ''GE a m j k t
   unitT
 
 gbmv :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
@@ -741,7 +704,7 @@ gbmv t m = do
   order
   (r, c) <- dimGB a
   scalar alpha t
-  matGB a r c t
+  mat ''GB a r c t
   vec x c t
   scalar beta t
   mutVec y m r t
@@ -757,7 +720,7 @@ hemv t m = do
   order
   n <- dimHE a
   scalar alpha t
-  matHE a n t
+  sqMat ''HE a n t
   vec x n t
   scalar beta t
   mutVec y m n t
@@ -772,7 +735,7 @@ her s t m = do
   n <- dimVec x
   scalar alpha s
   vec x n t
-  matMutHE a m n t
+  mutSqMat ''HE a m n t
   unitT
 
 her2 :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
@@ -786,7 +749,7 @@ her2 t m = do
   scalar alpha t
   vec x n t
   vec y n t
-  matMutHE a m n t
+  mutSqMat ''HE a m n t
   unitT
 
 hbmv :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
@@ -799,7 +762,7 @@ hbmv t m = do
   order
   n <- dimHB a
   scalar alpha t
-  matHB a n t
+  sqMat ''HB a n t
   vec x n t
   scalar beta t
   mutVec y m n t
@@ -815,7 +778,7 @@ hpmv t m = do
   order
   n <- dimHP a
   scalar alpha t
-  matHP a n t
+  sqMat ''HP a n t
   vec x n t
   scalar beta t
   mutVec y m n t
@@ -830,7 +793,7 @@ hpr s t m = do
   n <- dimVec x
   scalar alpha s
   vec x n t
-  matMutHP a m n t
+  mutSqMat ''HP a m n t
   unitT
 
 hpr2 :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
@@ -844,7 +807,7 @@ hpr2 t m = do
   scalar alpha t
   vec x n t
   vec y n t
-  matMutHP a m n t
+  mutSqMat ''HP a m n t
   unitT
 
 trmv :: Build a => Q Type -> M a -> WriterT (Acc a) Q Type
@@ -853,7 +816,7 @@ trmv t m = do
   x <- bind "x"
   order
   n <- dimTR a
-  matTR a n t
+  sqMat ''TR a n t
   mutVec x m n t
   unitT
 
@@ -863,7 +826,7 @@ tpmv t m = do
   x <- bind "x"
   order
   n <- dimTP a
-  matTP a n t
+  sqMat ''TP a n t
   mutVec x m n t
   unitT
 
@@ -873,7 +836,7 @@ tbmv t m = do
   x <- bind "x"
   order
   n <- dimTB a
-  matTB a n t
+  sqMat ''TB a n t
   mutVec x m n t
   unitT
 
