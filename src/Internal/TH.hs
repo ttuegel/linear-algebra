@@ -31,34 +31,36 @@ class Build a where
   data Acc a
   type M a
   type D a
-  type E a
-  build :: Monoid (Acc a) => E a -> (M a -> WriterT (Acc a) Q Type) -> Q a
-  bind :: String -> WriterT (Acc a) Q (E a)
+  type N a
+  build :: Monoid (Acc a) => N a -> (M a -> WriterT (Acc a) Q Type) -> Q a
+  bind :: String -> WriterT (Acc a) Q (N a)
   order :: WriterT (Acc a) Q ()
-  dimVec :: E a -> WriterT (Acc a) Q (D a)
-  dimMutVec :: E a -> WriterT (Acc a) Q (D a)
-  dimGE :: E a -> WriterT (Acc a) Q (D a, D a)
-  dimGB :: E a -> WriterT (Acc a) Q (D a, D a)
-  dimHE :: E a -> WriterT (Acc a) Q (D a)
-  dimHB :: E a -> WriterT (Acc a) Q (D a)
-  dimHP :: E a -> WriterT (Acc a) Q (D a)
-  dimTR :: E a -> WriterT (Acc a) Q (D a)
-  dimTP :: E a -> WriterT (Acc a) Q (D a)
-  dimTB :: E a -> WriterT (Acc a) Q (D a)
-  vec :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  mutVec :: E a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  scalar :: E a -> Q Type -> WriterT (Acc a) Q ()
-  matGE :: E a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matMutGE :: E a -> M a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matGB :: E a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matHE :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matMutHE :: E a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matHB :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matHP :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matMutHP :: E a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matTR :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matTP :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  matTB :: E a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  uplo :: N a -> N a -> WriterT (Acc a) Q ()
+  dim :: N a -> N a -> WriterT (Acc a) Q ()
+  dimVec :: N a -> WriterT (Acc a) Q (D a)
+  dimMutVec :: N a -> WriterT (Acc a) Q (D a)
+  dimGE :: N a -> WriterT (Acc a) Q (D a, D a)
+  dimGB :: N a -> WriterT (Acc a) Q (D a, D a)
+  dimHE :: N a -> WriterT (Acc a) Q (D a)
+  dimHB :: N a -> WriterT (Acc a) Q (D a)
+  dimHP :: N a -> WriterT (Acc a) Q (D a)
+  dimTR :: N a -> WriterT (Acc a) Q (D a)
+  dimTP :: N a -> WriterT (Acc a) Q (D a)
+  dimTB :: N a -> WriterT (Acc a) Q (D a)
+  vec :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  mutVec :: N a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  scalar :: N a -> Q Type -> WriterT (Acc a) Q ()
+  matGE :: N a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matMutGE :: N a -> M a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matGB :: N a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matHE :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matMutHE :: N a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matHB :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matHP :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matMutHP :: N a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matTR :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matTP :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  matTB :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
 
 tellC :: (Type -> Q Type) -> WriterT (Acc (C Type)) Q ()
 tellC = tell . AccC . Dual . Endo
@@ -68,7 +70,7 @@ instance Build (C Type) where
     deriving (Monoid, Semigroup)
   type M (C Type) = ()
   type D (C Type) = ()
-  type E (C Type) = ()
+  type N (C Type) = ()
 
   build _ go = do
     (a, finish) <- runWriterT (go ())
@@ -78,6 +80,10 @@ instance Build (C Type) where
   bind _ = pure ()
 
   order = tellC $ \r -> [t| I -> $(pure r) |]
+
+  uplo _ _ = tellC $ \r -> [t| I -> $(pure r) |]
+
+  dim _ _ = tellC $ \r -> [t| I -> $(pure r) |]
 
   dimVec _ = tellC $ \r -> [t| I -> $(pure r) |]
   dimMutVec = dimVec
@@ -140,7 +146,7 @@ instance Build (Hs Type) where
     deriving (Monoid, Semigroup)
   type M (Hs Type) = Type
   type D (Hs Type) = Type
-  type E (Hs Type) = ()
+  type N (Hs Type) = ()
 
   build _ go = do
     m <- newName "m"
@@ -155,6 +161,10 @@ instance Build (Hs Type) where
   bind _ = pure ()
 
   order = pure ()
+
+  uplo _ _ = pure ()
+
+  dim _ _ = pure ()
 
   dimVec _ = do
     n <- lift $ newName "n"
@@ -243,11 +253,11 @@ instance Build Exp where
     }
   type M Exp = ()
   type D Exp = ()
-  type E Exp = Exp
+  type N Exp = Name
 
   build call go = do
     (a, finish) <- runWriterT (go ())
-    _body <- (getEndo . getCall) finish call
+    _body <- (getEndo . getCall) finish =<< varE call
     let wrap = calling a pure (\b -> [| alloca $ \z -> $(pure b) z >> peek z |])
     _body <- wrap _body
     _body <- (getEndo . getDual . getBody) finish _body
@@ -257,16 +267,32 @@ instance Build Exp where
   bind _nm = do
     _nm <- lift (newName _nm)
     tell mempty { getBind = (Dual . Endo) $ lam1E (varP _nm) . pure }
-    lift (varE _nm)
+    pure _nm
 
   order = tell mempty { getCall = Endo $ \call -> [| $(pure call) 102 |] }
+
+  uplo nE nP =
+    tell mempty
+    { getCall = Endo $ \call -> do
+        up <- newName "up"
+        let body = [| $(pure call) $(varE up) |]
+        caseE (varE nE) [ match (conP nP [varP up]) (normalB body) [] ]
+    }
+
+  dim nE nP =
+    tell mempty
+    { getCall = Endo $ \call -> do
+        n <- newName "n"
+        let body = [| $(pure call) $(varE n) |]
+        caseE (varE nE) [ match (conP nP [varP n]) (normalB body) [] ]
+    }
 
   dimVec v = do
     nn <- lift $ newName "nn"
     tell mempty
       { getCall = Endo $ \call -> [| $(pure call) $(varE nn) |]
       , getBody = (Dual . Endo) $ \r ->
-          [| unsafeWithV $(pure v) $(lamE [varP nn, wildP, wildP] (pure r)) |]
+          [| unsafeWithV $(varE v) $(lamE [varP nn, wildP, wildP] (pure r)) |]
       }
 
   dimMutVec v = do
@@ -274,7 +300,7 @@ instance Build Exp where
     tell mempty
       { getCall = Endo $ \call -> [| $(pure call) $(varE nn) |]
       , getBody = (Dual . Endo) $ \r ->
-          [| withV $(pure v) $(lamE [varP nn, wildP, wildP] (pure r)) |]
+          [| withV $(varE v) $(lamE [varP nn, wildP, wildP] (pure r)) |]
       }
 
   dimGE m = do
@@ -285,7 +311,7 @@ instance Build Exp where
       { getCall = Endo $ \call ->
           [| $(pure call) (transToI $(varE t)) $(varE r) $(varE c) |]
       , getBody = (Dual . Endo) $ \rest ->
-          [| unsafeWithGE $(pure m)
+          [| unsafeWithGE $(varE m)
              $(lamE [varP t, varP r, varP c, wildP, wildP] (pure rest)) |]
       }
     pure ((), ())
@@ -303,7 +329,7 @@ instance Build Exp where
              $(varE kl) $(varE ku) |]
       , getBody = (Dual . Endo) $ \rest ->
           let binds = [varP t, varP r, varP c, varP kl, varP ku, wildP, wildP] in
-            [| unsafeWithGB $(pure m) $(lamE binds (pure rest)) |]
+            [| unsafeWithGB $(varE m) $(lamE binds (pure rest)) |]
       }
     pure ((), ())
 
@@ -315,7 +341,7 @@ instance Build Exp where
           [| $(pure call) (uploToI $(varE uplo)) $(varE nn) |]
       , getBody = (Dual . Endo) $ \r ->
           let binds = [varP uplo, varP nn, wildP, wildP] in
-            [| unsafeWithHE $(pure v) $(lamE binds (pure r)) |]
+            [| unsafeWithHE $(varE v) $(lamE binds (pure r)) |]
       }
 
   dimHB v = do
@@ -327,7 +353,7 @@ instance Build Exp where
           [| $(pure call) (uploToI $(varE uplo)) $(varE nn) $(varE k) |]
       , getBody = (Dual . Endo) $ \r ->
           let binds = [varP uplo, varP nn, varP k, wildP, wildP] in
-            [| unsafeWithHB $(pure v) $(lamE binds (pure r)) |]
+            [| unsafeWithHB $(varE v) $(lamE binds (pure r)) |]
       }
 
   dimHP v = do
@@ -338,7 +364,7 @@ instance Build Exp where
           [| $(pure call) (uploToI $(varE uplo)) $(varE nn) |]
       , getBody = (Dual . Endo) $ \r ->
           let binds = [varP uplo, varP nn, wildP] in
-            [| unsafeWithHP $(pure v) $(lamE binds (pure r)) |]
+            [| unsafeWithHP $(varE v) $(lamE binds (pure r)) |]
       }
 
   dimTR v = do
@@ -362,7 +388,7 @@ instance Build Exp where
                       , wildP
                       ]
           in
-            [| unsafeWithTR $(pure v) $(lamE binds (pure r)) |]
+            [| unsafeWithTR $(varE v) $(lamE binds (pure r)) |]
       }
 
   dimTP v = do
@@ -385,7 +411,7 @@ instance Build Exp where
                       , wildP
                       ]
           in
-            [| unsafeWithTP $(pure v) $(lamE binds (pure r)) |]
+            [| unsafeWithTP $(varE v) $(lamE binds (pure r)) |]
       }
 
   dimTB v = do
@@ -411,7 +437,7 @@ instance Build Exp where
                       , wildP
                       ]
           in
-            [| unsafeWithTB $(pure v) $(lamE binds (pure r)) |]
+            [| unsafeWithTB $(varE v) $(lamE binds (pure r)) |]
       }
 
   vec v _ _ = do
@@ -420,7 +446,7 @@ instance Build Exp where
     tell mempty
           { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE i) |]
           , getBody = (Dual . Endo) $ \r ->
-              [| unsafeWithV $(pure v)
+              [| unsafeWithV $(varE v)
                  $(lamE [wildP, varP p, varP i] (pure r)) |]
           }
 
@@ -430,7 +456,7 @@ instance Build Exp where
     tell mempty
           { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE i) |]
           , getBody = (Dual . Endo) $ \r ->
-              [| withV $(pure v) $(lamE [wildP, varP p, varP i] (pure r)) |]
+              [| withV $(varE v) $(lamE [wildP, varP p, varP i] (pure r)) |]
           }
 
   scalar s a = do
@@ -438,7 +464,7 @@ instance Build Exp where
     tell mempty
       { getCall = Endo $ \call -> [| $(pure call) $(varE z) |]
       , getBody = (Dual . Endo) $ \r ->
-          [| $(withE =<< a) $(pure s) $(lam1E (varP z) (pure r)) |]
+          [| $(withE =<< a) $(varE s) $(lam1E (varP z) (pure r)) |]
       }
 
   matGE gb _ _ _ = do
@@ -458,7 +484,7 @@ instance Build Exp where
           { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
           , getBody = (Dual . Endo) $ \r ->
               let binds = [wildP, wildP, wildP, varP p, varP ld] in
-                [| withGE $(pure ge) $(lamE binds (pure r)) |]
+                [| withGE $(varE ge) $(lamE binds (pure r)) |]
           }
 
   matGB gb _ _ _ = do
@@ -468,7 +494,7 @@ instance Build Exp where
           { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
           , getBody = (Dual . Endo) $ \r ->
               let binds = [wildP, wildP, wildP, wildP, wildP, varP p, varP ld] in
-                [| unsafeWithGB $(pure gb) $(lamE binds (pure r)) |]
+                [| unsafeWithGB $(varE gb) $(lamE binds (pure r)) |]
           }
 
   matHE he _ _ = do
@@ -478,7 +504,7 @@ instance Build Exp where
           { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
           , getBody = (Dual . Endo) $ \r ->
               let binds = [wildP, wildP, varP p, varP ld] in
-                [| unsafeWithHE $(pure he) $(lamE binds (pure r)) |]
+                [| unsafeWithHE $(varE he) $(lamE binds (pure r)) |]
           }
 
   matMutHE he _ _ _ = do
@@ -488,7 +514,7 @@ instance Build Exp where
           { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
           , getBody = (Dual . Endo) $ \r ->
               let binds = [wildP, wildP, varP p, varP ld] in
-                [| withHE $(pure he) $(lamE binds (pure r)) |]
+                [| withHE $(varE he) $(lamE binds (pure r)) |]
           }
 
   matHB hb _ _ = do
@@ -498,7 +524,7 @@ instance Build Exp where
           { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
           , getBody = (Dual . Endo) $ \r ->
               let binds = [wildP, wildP, wildP, varP p, varP ld] in
-                [| unsafeWithHB $(pure hb) $(lamE binds (pure r)) |]
+                [| unsafeWithHB $(varE hb) $(lamE binds (pure r)) |]
           }
 
   matHP hp _ _ = do
@@ -507,7 +533,7 @@ instance Build Exp where
           { getCall = Endo $ \call -> [| $(pure call) $(varE p) |]
           , getBody = (Dual . Endo) $ \r ->
               let binds = [wildP, wildP, varP p] in
-                [| unsafeWithHP $(pure hp) $(lamE binds (pure r)) |]
+                [| unsafeWithHP $(varE hp) $(lamE binds (pure r)) |]
           }
 
   matMutHP hp _ _ _ = do
@@ -516,7 +542,7 @@ instance Build Exp where
           { getCall = Endo $ \call -> [| $(pure call) $(varE p) |]
           , getBody = (Dual . Endo) $ \r ->
               let binds = [wildP, wildP, varP p] in
-                [| withHP $(pure hp) $(lamE binds (pure r)) |]
+                [| withHP $(varE hp) $(lamE binds (pure r)) |]
           }
 
   matTR tr _ _ = do
@@ -526,7 +552,7 @@ instance Build Exp where
           { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
           , getBody = (Dual . Endo) $ \r ->
               let binds = [wildP, wildP, wildP, wildP, varP p, varP ld] in
-                [| unsafeWithTR $(pure tr) $(lamE binds (pure r)) |]
+                [| unsafeWithTR $(varE tr) $(lamE binds (pure r)) |]
           }
 
   matTP tr _ _ = do
@@ -535,7 +561,7 @@ instance Build Exp where
           { getCall = Endo $ \call -> [| $(pure call) $(varE p) |]
           , getBody = (Dual . Endo) $ \r ->
               let binds = [wildP, wildP, wildP, wildP, varP p] in
-                [| unsafeWithTP $(pure tr) $(lamE binds (pure r)) |]
+                [| unsafeWithTP $(varE tr) $(lamE binds (pure r)) |]
           }
 
   matTB tr _ _ = do
@@ -545,7 +571,7 @@ instance Build Exp where
           { getCall = Endo $ \call -> [| $(pure call) $(varE p) $(varE ld) |]
           , getBody = (Dual . Endo) $ \r ->
               let binds = [wildP, wildP, wildP, wildP, wildP, varP p, varP ld] in
-                [| unsafeWithTB $(pure tr) $(lamE binds (pure r)) |]
+                [| unsafeWithTB $(varE tr) $(lamE binds (pure r)) |]
           }
 
 instance Semigroup (Acc Exp) where
@@ -576,20 +602,20 @@ calling t byVal byRef = do
       | complex == ''Complex -> byRef
     _ -> byVal
 
-cblas_import :: String -> Q (C Type) -> Q (Exp, Dec)
+cblas_import :: String -> Q (C Type) -> Q (Name, Dec)
 cblas_import fnam ctyp = do
   let
     cnam = "cblas_" ++ fnam
     hnam = mkName cnam
-  (,) <$> varE hnam <*> forImpD cCall unsafe cnam hnam (getC <$> ctyp)
+  (,) hnam <$> forImpD cCall unsafe cnam hnam (getC <$> ctyp)
 
 cblas :: (forall a. Build a => M a -> WriterT (Acc a) Q Type)
       -> String
       -> Q [Dec]
 cblas sig fnam = do
-  (call, cdec) <- cblas_import fnam (build () sig)
+  (cnam, cdec) <- cblas_import fnam (build () sig)
   let hnam = mkName fnam
-  body <- build call sig
+  body <- build cnam sig
   hsig <- sigD hnam (getHs <$> build () sig)
   hdec <- valD (varP hnam) (normalB $ pure body) []
   pure [cdec, hsig, hdec]
