@@ -21,7 +21,7 @@ flag use-int64
 library
   hs-source-dirs:
       src/
-  default-extensions: DataKinds DeriveDataTypeable DuplicateRecordFields FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators
+  default-extensions: BangPatterns DataKinds DeriveDataTypeable DuplicateRecordFields FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators
   ghc-options: -Wall
   extra-libraries:
       openblas
@@ -31,16 +31,19 @@ library
     , inline-c
     , parsers
     , primitive
+    , tagged
     , template-haskell
     , transformers
     , vector
   if flag(use-int64)
     cpp-options: -DINT=int64_t
+  else
+    cpp-options: -DINT=int32_t
   exposed-modules:
-      Data.Dim
       Data.Int.Blas
-  other-modules:
       Data.Vector.Blas
+  other-modules:
+      Data.Mut
       Internal.Blas
       Internal.Endo
       Internal.Int
@@ -50,4 +53,25 @@ library
       Internal.Vector
       Internal.Writer
       Paths_linear_algebra
+  default-language: Haskell2010
+
+test-suite dblat
+  type: exitcode-stdio-1.0
+  main-is: dblat.hs
+  hs-source-dirs:
+      tests/
+  default-extensions: BangPatterns DataKinds DeriveDataTypeable DuplicateRecordFields FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators
+  ghc-options: -Wall
+  build-depends:
+      base >= 4.10
+    , containers
+    , inline-c
+    , parsers
+    , primitive
+    , tagged
+    , template-haskell
+    , transformers
+    , vector
+    , hedgehog
+    , openblas
   default-language: Haskell2010

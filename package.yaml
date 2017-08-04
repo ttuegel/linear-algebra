@@ -14,6 +14,7 @@ flags:
 ghc-options: -Wall
 
 default-extensions:
+  - BangPatterns
   - DataKinds
   - DeriveDataTypeable
   - DuplicateRecordFields
@@ -45,10 +46,21 @@ dependencies:
 library:
   source-dirs: src/
   exposed-modules:
-    - Data.Dim
     - Data.Int.Blas
+    - Data.Vector.Blas
   extra-libraries:
     - openblas
   when:
     - condition: flag(use-int64)
-      cpp-options: -DINT=int64_t
+      then:
+        cpp-options: -DINT=int64_t
+      else:
+        cpp-options: -DINT=int32_t
+
+tests:
+  dblat:
+    source-dirs: tests/
+    main: dblat.hs
+    dependencies:
+      - hedgehog
+      - openblas

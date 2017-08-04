@@ -17,11 +17,10 @@ import Language.Haskell.TH
 
 import qualified Data.Map as Map
 
-import Data.Dim
-import Internal.Int (I)
+import Internal.Int (I, Dim, N(..))
 import Internal.Matrix
 import Internal.Mut
-import Internal.Vector
+import Internal.Vector (V(..))
 import Internal.Writer
 
 
@@ -78,13 +77,13 @@ getsDim =
   Map.fromList
   [ (''GE, nonSquare ''GE)
   , (''GB, nonSquare ''GB)
-  , (''HE, [| \case HE _ n _ _ -> n |])
-  , (''HB, [| \case HB _ _ n _ _ -> n |])
-  , (''HP, [| \case HP _ n _ -> n |])
-  , (''TR, [| \case TR _ _ _ n _ _ -> n |])
-  , (''TB, [| \case TB _ _ _ _ n _ _ -> n |])
-  , (''TP, [| \case TP _ _ _ n _ -> n |])
-  , (''V, [| \case V n _ _ -> n |])
+  , (''HE, [| \case HE _ (N n) _ _ -> n |])
+  , (''HB, [| \case HB _ (N n) _ _ _ -> n |])
+  , (''HP, [| \case HP _ (N n) _ -> n |])
+  , (''TR, [| \case TR _ _ _ (N n) _ _ -> n |])
+  , (''TB, [| \case TB _ _ _ (N n) _ _ _ -> n |])
+  , (''TP, [| \case TP _ _ _ (N n) _ -> n |])
+  , (''V, [| \case V (N n) _ _ -> n |])
   ]
   where
     nonSquare ty =
@@ -93,8 +92,8 @@ getsDim =
 getsRows :: Map Name (Q Exp)
 getsRows =
   Map.fromList
-  [ (''GE, [| \case GE _ n _ _ _ -> n |])
-  , (''GB, [| \case GB _ _ n _ _ _ _ -> n |])
+  [ (''GE, [| \case GE _ (N n) _ _ _ -> n |])
+  , (''GB, [| \case GB _ (N n) _ _ _ _ _ -> n |])
   , (''HE, square ''HE)
   , (''HB, square ''HB)
   , (''HP, square ''HP)
@@ -109,8 +108,8 @@ getsRows =
 getsCols :: Map Name (Q Exp)
 getsCols =
   Map.fromList
-  [ (''GE, [| \case GE _ _ n _ _ -> n |])
-  , (''GB, [| \case GB _ _ _ n _ _ _ -> n |])
+  [ (''GE, [| \case GE _ _ (N n) _ _ -> n |])
+  , (''GB, [| \case GB _ _ (N n) _ _ _ _ -> n |])
   , (''HE, square ''HE)
   , (''HB, square ''HB)
   , (''HP, square ''HP)
@@ -213,27 +212,27 @@ class Build a where
   data Acc a
   type M a
   type D a
-  type N a
-  build :: Monoid (Acc a) => N a -> (M a -> WriterT (Acc a) Q Type) -> Q a
-  bind :: String -> WriterT (Acc a) Q (N a)
+  type Nm a
+  build :: Monoid (Acc a) => Nm a -> (M a -> WriterT (Acc a) Q Type) -> Q a
+  bind :: String -> WriterT (Acc a) Q (Nm a)
   order :: WriterT (Acc a) Q ()
-  uplo :: Name -> N a -> WriterT (Acc a) Q ()
-  trans :: Name -> N a -> WriterT (Acc a) Q ()
-  diag :: Name -> N a -> WriterT (Acc a) Q ()
-  dim :: Name -> N a -> WriterT (Acc a) Q (D a)
-  dimMut :: Name -> N a -> WriterT (Acc a) Q (D a)
-  rows :: Name -> N a -> WriterT (Acc a) Q (D a)
-  cols :: Name -> N a -> WriterT (Acc a) Q (D a)
-  band :: Name -> N a -> WriterT (Acc a) Q ()
-  lower :: Name -> N a -> WriterT (Acc a) Q ()
-  upper :: Name -> N a -> WriterT (Acc a) Q ()
-  vec :: N a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  mutVec :: N a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  scalar :: N a -> Q Type -> WriterT (Acc a) Q ()
-  mat :: Name -> N a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  mutMat :: Name -> N a -> M a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  sqMat :: Name -> N a -> D a -> Q Type -> WriterT (Acc a) Q ()
-  mutSqMat :: Name -> N a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  uplo :: Name -> Nm a -> WriterT (Acc a) Q ()
+  trans :: Name -> Nm a -> WriterT (Acc a) Q ()
+  diag :: Name -> Nm a -> WriterT (Acc a) Q ()
+  dim :: Name -> Nm a -> WriterT (Acc a) Q (D a)
+  dimMut :: Name -> Nm a -> WriterT (Acc a) Q (D a)
+  rows :: Name -> Nm a -> WriterT (Acc a) Q (D a)
+  cols :: Name -> Nm a -> WriterT (Acc a) Q (D a)
+  band :: Name -> Nm a -> WriterT (Acc a) Q ()
+  lower :: Name -> Nm a -> WriterT (Acc a) Q ()
+  upper :: Name -> Nm a -> WriterT (Acc a) Q ()
+  vec :: Nm a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  mutVec :: Nm a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  scalar :: Nm a -> Q Type -> WriterT (Acc a) Q ()
+  mat :: Name -> Nm a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  mutMat :: Name -> Nm a -> M a -> D a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  sqMat :: Name -> Nm a -> D a -> Q Type -> WriterT (Acc a) Q ()
+  mutSqMat :: Name -> Nm a -> M a -> D a -> Q Type -> WriterT (Acc a) Q ()
 
 tellC :: (Q Type -> Q Type) -> WriterT (Acc (C Type)) Q ()
 tellC = tell . AccC . Endo
@@ -243,7 +242,7 @@ instance Build (C Type) where
     deriving (Monoid, Semigroup)
   type M (C Type) = ()
   type D (C Type) = ()
-  type N (C Type) = ()
+  type Nm (C Type) = ()
 
   build _ go = do
     (a, finish) <- runWriterT (go ())
@@ -308,7 +307,7 @@ instance Build (Hs Type) where
     deriving (Monoid, Semigroup)
   type M (Hs Type) = Type
   type D (Hs Type) = Type
-  type N (Hs Type) = ()
+  type Nm (Hs Type) = ()
 
   build _ go = do
     m <- newName "m"
@@ -420,7 +419,7 @@ instance Build Exp where
     }
   type M Exp = ()
   type D Exp = ()
-  type N Exp = Name
+  type Nm Exp = Name
 
   build cnam go = do
     (a, finish) <- runWriterT (go ())
@@ -513,12 +512,12 @@ instance Monoid (Acc Exp) where
   mempty = AccExp { getCall = mempty, getBody = mempty, getBind = mempty }
   mappend = (<>)
 
-dimGE :: Build a => N a -> WriterT (Acc a) Q (D a, D a)
+dimGE :: Build a => Nm a -> WriterT (Acc a) Q (D a, D a)
 dimGE m = do
   trans ''GE m
   (,) <$> rows ''GE m <*> cols ''GE m
 
-dimGB :: Build a => N a -> WriterT (Acc a) Q (D a, D a)
+dimGB :: Build a => Nm a -> WriterT (Acc a) Q (D a, D a)
 dimGB m = do
   trans ''GB m
   n <- (,) <$> rows ''GB m <*> cols ''GB m
@@ -526,31 +525,31 @@ dimGB m = do
   upper ''GB m
   pure n
 
-dimHE :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimHE :: Build a => Nm a -> WriterT (Acc a) Q (D a)
 dimHE v = do
   uplo ''HE v
   dim ''HE v
 
-dimHB :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimHB :: Build a => Nm a -> WriterT (Acc a) Q (D a)
 dimHB v = do
   uplo ''HB v
   n <- dim ''HB v
   band ''HB v
   pure n
 
-dimHP :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimHP :: Build a => Nm a -> WriterT (Acc a) Q (D a)
 dimHP v = do
   uplo ''HP v
   dim ''HP v
 
-dimTR :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimTR :: Build a => Nm a -> WriterT (Acc a) Q (D a)
 dimTR v = do
   uplo ''TR v
   trans ''TR v
   diag ''TR v
   dim ''TR v
 
-dimTB :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimTB :: Build a => Nm a -> WriterT (Acc a) Q (D a)
 dimTB v = do
   uplo ''TB v
   trans ''TB v
@@ -559,17 +558,17 @@ dimTB v = do
   band ''TB v
   pure n
 
-dimTP :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimTP :: Build a => Nm a -> WriterT (Acc a) Q (D a)
 dimTP v = do
   uplo ''TP v
   trans ''TP v
   diag ''TP v
   dim ''TP v
 
-dimVec :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimVec :: Build a => Nm a -> WriterT (Acc a) Q (D a)
 dimVec = dim ''V
 
-dimMutVec :: Build a => N a -> WriterT (Acc a) Q (D a)
+dimMutVec :: Build a => Nm a -> WriterT (Acc a) Q (D a)
 dimMutVec = dimMut ''V
 
 withE :: Type -> Q Exp
