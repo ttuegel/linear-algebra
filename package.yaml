@@ -1,6 +1,6 @@
-name: openblas
+name: linear-algebra
 version: 0.0.0
-github: ttuegel/openblas
+github: ttuegel/linear-algebra
 
 flags:
   use-int64:

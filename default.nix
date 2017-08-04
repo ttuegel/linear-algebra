@@ -2,7 +2,7 @@
 , primitive, stdenv, template-haskell, transformers, vector
 }:
 mkDerivation {
-  pname = "openblas";
+  pname = "linear-algebra";
   version = "0.0.0";
   src = ./.;
   libraryHaskellDepends = [
@@ -10,6 +10,6 @@ mkDerivation {
     transformers vector
   ];
   librarySystemDepends = [ openblasCompat ];
-  homepage = "https://github.com/ttuegel/openblas#readme";
+  homepage = "https://github.com/ttuegel/linear-algebra#readme";
   license = stdenv.lib.licenses.unfree;
 }
