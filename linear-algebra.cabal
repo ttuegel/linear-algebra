@@ -21,17 +21,17 @@ flag use-int64
 library
   hs-source-dirs:
       src/
-  default-extensions: BangPatterns DataKinds DeriveDataTypeable DuplicateRecordFields FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators
+  default-extensions: AllowAmbiguousTypes BangPatterns DataKinds DeriveDataTypeable DuplicateRecordFields FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MagicHash MultiParamTypeClasses OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators UnboxedTuples
   ghc-options: -Wall
   extra-libraries:
       openblas
   build-depends:
       base >= 4.10
     , containers
+    , ghc-prim
     , inline-c
     , parsers
     , primitive
-    , tagged
     , template-haskell
     , transformers
     , vector
@@ -60,15 +60,15 @@ test-suite dblat
   main-is: dblat.hs
   hs-source-dirs:
       tests/
-  default-extensions: BangPatterns DataKinds DeriveDataTypeable DuplicateRecordFields FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators
+  default-extensions: AllowAmbiguousTypes BangPatterns DataKinds DeriveDataTypeable DuplicateRecordFields FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MagicHash MultiParamTypeClasses OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators UnboxedTuples
   ghc-options: -Wall
   build-depends:
       base >= 4.10
     , containers
+    , ghc-prim
     , inline-c
     , parsers
     , primitive
-    , tagged
     , template-haskell
     , transformers
     , vector

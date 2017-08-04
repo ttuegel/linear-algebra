@@ -14,13 +14,17 @@ module Data.Vector.Blas
 import Control.Monad (when)
 import Control.Monad.Primitive
 import Control.Monad.ST
+import Control.Monad.Trans.State.Strict (evalState, execState, get, put)
 import Data.Proxy
-import Language.Haskell.TH
-import Prelude hiding (concat, foldl', foldr, length, mapM_, null, read, replicate)
+import GHC.Prim (State#)
+import Language.Haskell.TH hiding (dyn)
+import Language.Haskell.TH.Syntax (Lift(..))
+import Prelude hiding (concat, foldl', foldr, length, mapM_, null, read, replicate, tail)
+import qualified Prelude
 
 import Internal.Mut
 import Internal.Int
-import Internal.Vector hiding (slice)
+import Internal.Vector hiding (slice, unsafeSlice)
 import qualified Internal.Vector as Internal
 
 length :: V n a -> N n
@@ -36,14 +40,18 @@ null (V (N n) _ _) = n == 0
       error ("Data.Vector.Blas.!: index `" ++ show ni
               ++ "' out of bounds `" ++ show nn ++ "'")
 
-slice :: (Storable a, i < k, i + l <= k) => N i -> N l -> V k a -> V l a
-slice ni@(N i) nl (V nn fptr inc)
-  | lessThan ni nn && lessThanOrEqual (plus ni nl) nn =
-      let fptr' = advanceForeignPtr fptr (fromIntegral $! i * inc) in
-        V nl fptr' inc
+slice :: (Storable a, i <= k, i + l <= k) => N i -> N l -> V k a -> V l a
+slice ni nl as
+  | lessThanOrEqual ni (length as) && lessThanOrEqual (plus ni nl) (length as) =
+      unsafeSlice (toI ni) nl as
   | otherwise =
       error ("slice: index `" ++ show ni
-              ++ "' out of bounds `" ++ show nn ++ "'")
+              ++ "' out of bounds `" ++ show (length as) ++ "'")
+
+unsafeSlice :: Storable a => I -> N l -> V k a -> V l a
+unsafeSlice i nl (V nn fptr inc) =
+  let fptr' = advanceForeignPtr fptr (fromIntegral $! i * inc) in
+    V nl fptr' inc
 
 empty :: Storable a => V ('Sta 0) a
 empty = create (new $(sta 0))
@@ -89,39 +97,67 @@ iterateN nn@(N n) f _a = create $ do
   iterateN_go 0 _a
   pure v
 
-replicateM :: (Monad m, Storable a) => N n -> m a -> m (V n a)
-replicateM nn@(N n) get = do
-  v <- new nn
-  let
-    replicateM_go !i = do
-      get >>= unsafeWrite v i
-      when (i /= 0) (replicateM_go (i - 1))
-  when (n > 0) (replicateM_go (n - 1))
-  freeze v
+replicateM :: forall a m n. (Monad m, Storable a) => N n -> m a -> m (V n a)
+replicateM nn@(N n) get = runST (primitive replicateM_go) where
+  replicateM_go :: forall s.
+                   State# (PrimState (ST s))
+                -> (# State# (PrimState (ST s)), m (V n a) #)
+  replicateM_go _s =
+    case internal (new nn :: ST s (Mut (V n) (PrimState (ST s)) a)) _s of
+      (# _s, tmp #) ->
+        let
+          replicateM_loop :: State# (PrimState (ST s)) -> I -> m (V n a)
+          replicateM_loop _s !i
+              | i < 0 =
+                  case internal (unsafeFreeze tmp :: ST s (V n a)) _s of
+                    (# _, v #) -> pure v
+              | otherwise = do
+                  a <- get
+                  case internal (unsafeWrite tmp i a :: ST s ()) _s of
+                    (# _s, () #) -> replicateM_loop _s (i - 1)
+        in (# _s, replicateM_loop _s (n - 1) #)
 
 
-generateM :: (Monad m, Storable a) => N n -> (I -> m a) -> m (V n a)
-generateM nn@(N n) get = do
-  v <- new nn
-  let
-    replicateM_go !i = do
-      get i >>= unsafeWrite v i
-      when (i /= 0) (replicateM_go (i - 1))
-  when (n > 0) (replicateM_go (n - 1))
-  freeze v
+generateM :: forall a m n. (Monad m, Storable a) => N n -> (I -> m a) -> m (V n a)
+generateM nn@(N n) get = runST (primitive generateM_go) where
+  generateM_go :: forall s.
+                  State# (PrimState (ST s))
+               -> (# State# (PrimState (ST s)), m (V n a) #)
+  generateM_go _s =
+    case internal (new nn :: ST s (Mut (V n) (PrimState (ST s)) a)) _s of
+      (# _s, tmp #) ->
+        let
+          generateM_loop :: State# (PrimState (ST s)) -> I -> m (V n a)
+          generateM_loop _s !i
+              | i < 0 =
+                  case internal (unsafeFreeze tmp :: ST s (V n a)) _s of
+                    (# _, v #) -> pure v
+              | otherwise = do
+                  a <- get i
+                  case internal (unsafeWrite tmp i a :: ST s ()) _s of
+                    (# _s, () #) -> generateM_loop _s (i - 1)
+        in (# _s, generateM_loop _s (n - 1) #)
 
-iterateNM :: (Monad m, Storable a) =>
+iterateNM :: forall a m n. (Monad m, Storable a) =>
              N n -> (a -> m a) -> a -> m (V n a)
-iterateNM nn@(N n) get _a = do
-  v <- new nn
-  let
-    iterateN_go !i !_a
-      | i == n = pure ()
-      | otherwise = do
-          unsafeWrite v i _a
-          iterateN_go (i + 1) =<< get _a
-  iterateN_go 0 _a
-  freeze v
+iterateNM nn@(N n) get _a = runST (primitive iterateNM_go) where
+  iterateNM_go :: forall s.
+                  State# (PrimState (ST s))
+               -> (# State# (PrimState (ST s)), m (V n a) #)
+  iterateNM_go _s =
+    case internal (new nn :: ST s (Mut (V n) (PrimState (ST s)) a)) _s of
+      (# _s, tmp #) ->
+        let
+          iterateNM_loop :: State# (PrimState (ST s)) -> I -> a -> m (V n a)
+          iterateNM_loop _s !i _a
+              | i == n =
+                  case internal (unsafeFreeze tmp :: ST s (V n a)) _s of
+                    (# _, v #) -> pure v
+              | otherwise = do
+                  _a <- get _a
+                  case internal (unsafeWrite tmp i _a :: ST s ()) _s of
+                    (# _s, () #) -> iterateNM_loop _s (i + 1) _a
+        in (# _s, iterateNM_loop _s 0 _a #)
 
 enumFromN :: (Num a, Storable a) => a -> N n -> V n a
 enumFromN from nn = enumFromStepN from 1 nn
@@ -135,8 +171,8 @@ concat as bs = create $ do
     nm@(N m) = length as
     nn = length bs
   v <- new (plus nm nn)
-  copy (unsafeSlice m nn v) bs
-  copy (unsafeSlice 0 nm v) as
+  copy (Internal.unsafeSlice m nn v) bs
+  copy (Internal.unsafeSlice 0 nm v) as
   pure v
 
 force :: Storable a => V n a -> V n a
@@ -497,74 +533,57 @@ fold1M' f as = do
     !_a = unsafeIndex as 0
   fold1M'_loop 1 _a
 
-{-
-backpermute :: V n a -> V n I -> V n a
+minIndex :: (Ord a, Storable a, 'Sta 1 <= n) => V n a -> I
+minIndex as =
+  fst $ execState (imapM_ minIndex_go tail_as) (0, unsafeIndex as 0)
+  where
+    tail_as = slice $(sta 1) (dyn $ toI (length as) - 1) as
+    minIndex_go !i a = get >>= \(_, amin) -> when (a < amin) (put (i, a))
 
-modify :: (forall s. Mut (V n) s a -> ST s ()) -> V n a -> V n a
+minIndexBy :: (Storable a, 'Sta 1 <= n) => (a -> a -> Ordering) -> V n a -> I
+minIndexBy comp as =
+  fst $ execState (imapM_ minIndexBy_go tail_as) (0, unsafeIndex as 0)
+  where
+    tail_as = slice $(sta 1) (dyn $ toI (length as) - 1) as
+    minIndexBy_go !i a = do
+      (_, amin) <- get
+      case comp a amin of
+        LT -> put (i, a)
+        _ -> pure ()
 
-minIndex :: ('Sta 0 < n, Ord a) => V n a -> I
+maxIndex :: (Ord a, Storable a, 'Sta 1 <= n) => V n a -> I
+maxIndex as =
+  fst $ execState (imapM_ maxIndex_go tail_as) (0, unsafeIndex as 0)
+  where
+    tail_as = slice $(sta 1) (dyn $ toI (length as) - 1) as
+    maxIndex_go !i a = get >>= \(_, amax) -> when (a > amax) (put (i, a))
 
-minIndexBy :: ('Sta 0 < n) => (a -> a -> Ordering) -> V n a -> I
+maxIndexBy :: (Storable a, 'Sta 1 <= n) => (a -> a -> Ordering) -> V n a -> I
+maxIndexBy comp as =
+  fst $ execState (imapM_ maxIndexBy_go tail_as) (0, unsafeIndex as 0)
+  where
+    tail_as = slice $(sta 1) (dyn $ toI (length as) - 1) as
+    maxIndexBy_go !i a = do
+      (_, amax) <- get
+      case comp a amax of
+        GT -> put (i, a)
+        _ -> pure ()
 
-maxIndex :: ('Sta 0 < n, Ord a) => V n a -> I
+unsafeFromList :: Storable a => N n -> [a] -> V n a
+unsafeFromList n = evalState (replicateM n unsafeFromList_go) where
+  unsafeFromList_go = get >>= \(a : as) -> put as >> pure a
 
-maxIndexBy :: ('Sta 0 < n) => (a -> a -> Ordering) -> V n a -> I
+fromList :: Storable a => [a] -> V 'Dyn a
+fromList as =
+  let n = Prelude.length as in
+    unsafeFromList (dyn $ fromIntegral n) as
 
-prescanl :: (a -> b -> a) -> a -> V n b -> V n a
-
-prescanl' :: (a -> b -> a) -> a -> V n b -> V n a
-
-postscanl :: (a -> b -> a) -> a -> V n b -> V n a
-
-postscanl' :: (a -> b -> a) -> a -> V n b -> V n a
-
-scanl :: (a -> b -> a) -> a -> V n b -> V (n + 'Sta 1) a
-
-scanl' :: (a -> b -> a) -> a -> V n b -> V (n + 'Sta 1) a
-
-scanl1 :: (a -> a -> a) -> V n a -> V n a
-
-scanl1' :: (a -> a -> a) -> V n a -> V n a
-
-iscanl :: (I -> a -> b -> a) -> a -> V n b -> V (n + 'Sta 1) a
-
-iscanl' :: (I -> a -> b -> a) -> a -> V n b -> V (n + 'Sta 1) a
-
-prescanr :: (a -> b -> b) -> b -> V n a -> V n b
-
-prescanr' :: (a -> b -> b) -> b -> V n a -> V n b
-
-postscanr :: (a -> b -> b) -> b -> V n a -> V n b
-
-postscanr' :: (a -> b -> b) -> b -> V n a -> V n b
-
-scanr :: (a -> b -> b) -> b -> V n a -> V (n + 'Sta 1) b
-
-scanr' :: (a -> b -> b) -> b -> V n a -> V (n + 'Sta 1) b
-
-scanr1 :: (a -> a -> a) -> V n a -> V n a
-
-scanr1' :: (a -> a -> a) -> V n a -> V n a
-
-iscanr :: (I -> a -> b -> b) -> b -> V n a -> V (n + 'Sta 1) b
-
-iscanr' :: (I -> a -> b -> b) -> b -> V n a -> V (n + 'Sta 1) b
-
-fromList :: [a] -> V 'Dyn a
-fromList = unsafeFromList (Proxy :: Proxy 'Dyn)
-
-unsafeFromList :: Proxy n -> [a] -> V n a
-unsafeFromList _ as = _
-
-unsafeSizeCast :: V j a -> V k a
-unsafeSizeCast (V n p i) = V n p i
-
-litV :: forall a. [a] -> Q Exp
+litV :: Lift a => [a] -> Q Exp
 litV as =
   let
-    n = Prelude.length as
-    dim = [t| 'Sta $(litT (numTyLit n)) |]
+    n = fromIntegral (Prelude.length as)
   in
-    [| unsafeFromList (Proxy :: Proxy $dim) $(lift as) |]
+    [| unsafeFromList $(sta n) $(lift as) |]
 
--}
+toDynV :: V n a -> V 'Dyn a
+toDynV (V (N n) fptr inc) = V (N n) fptr inc

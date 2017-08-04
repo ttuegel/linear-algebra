@@ -12,9 +12,6 @@ import Control.Monad (when)
 import Control.Monad.Primitive
 import Foreign.ForeignPtr
        ( ForeignPtr, mallocForeignPtrArray, plusForeignPtr, withForeignPtr )
-import Foreign.Marshal.Array (advancePtr)
-import Foreign.Marshal.Utils (fillBytes)
-import Foreign.Ptr (Ptr)
 import Foreign.Storable (Storable, peekElemOff, pokeElemOff, sizeOf)
 import Prelude hiding (read)
 

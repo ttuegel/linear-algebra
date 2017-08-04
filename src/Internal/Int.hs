@@ -58,11 +58,11 @@ instance (m GHC.<= n) => (<=) ('Sta m) ('Sta n) where
   {-# INLINE lessThanOrEqual #-}
   lessThanOrEqual _ _ = True
 
-instance (<=) 'Dyn a where
+instance (<=) ('Sta n) 'Dyn where
   {-# INLINE lessThanOrEqual #-}
   lessThanOrEqual (N a) (N b) = a <= b
 
-instance (<=) a 'Dyn where
+instance (<=) 'Dyn a where
   {-# INLINE lessThanOrEqual #-}
   lessThanOrEqual (N a) (N b) = a <= b
 
