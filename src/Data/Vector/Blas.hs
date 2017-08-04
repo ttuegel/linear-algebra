@@ -9,17 +9,32 @@ module Data.Vector.Blas
   , replicateM, generateM, iterateNM
   , enumFromN, enumFromStepN
   , concat, copy, force
+  , reverse
+  , imap, map, imapM, mapM, mapM_, imapM_, forM_
+  , zipWith, izipWith, zipWithM, izipWithM, zipWithM_, izipWithM_
+  , zipWith3, izipWith3
+  , foldl, foldl1, foldl', foldl1', ifoldl, ifoldl'
+  , foldr, foldr1, foldr', foldr1', ifoldr, ifoldr'
+  , foldM, ifoldM, foldM', ifoldM', fold1M, fold1M'
+  , all, any, and, or, sum, product
+  , maximum, maximumBy, minimum, minimumBy
+  , minIndex, minIndexBy, maxIndex, maxIndexBy
+  , unsafeFromList, fromList, litV, toDynV
   ) where
 
-import Control.Monad (when)
+import Control.Applicative hiding (empty)
+import Control.Monad hiding (foldM, forM_, mapM, mapM_, replicateM, zipWithM, zipWithM_)
 import Control.Monad.Primitive
 import Control.Monad.ST
-import Control.Monad.Trans.State.Strict (evalState, execState, get, put)
-import Data.Proxy
+import qualified Control.Monad.Trans.State.Strict as State
+import Data.Bool
+import Data.Eq
+import Data.Function
+import Data.Ord
 import GHC.Prim (State#)
 import Language.Haskell.TH hiding (dyn)
 import Language.Haskell.TH.Syntax (Lift(..))
-import Prelude hiding (concat, foldl', foldr, length, mapM_, null, read, replicate, tail)
+import Prelude (Num(..), ($!), (++), error, fromIntegral, fst, show)
 import qualified Prelude
 
 import Internal.Mut
@@ -49,7 +64,7 @@ slice ni nl as
               ++ "' out of bounds `" ++ show (length as) ++ "'")
 
 unsafeSlice :: Storable a => I -> N l -> V k a -> V l a
-unsafeSlice i nl (V nn fptr inc) =
+unsafeSlice i nl (V _ fptr inc) =
   let fptr' = advanceForeignPtr fptr (fromIntegral $! i * inc) in
     V nl fptr' inc
 
@@ -347,7 +362,7 @@ foldr f b as = foldr_loop 0 where
     | i == n = b
     | otherwise = f (unsafeIndex as i) (foldr_loop (i + 1))
 
-foldr1 :: forall a b (n :: Dim). (Storable a, 'Sta 0 < n) =>
+foldr1 :: forall a (n :: Dim). (Storable a, 'Sta 0 < n) =>
           (a -> a -> a) -> V n a -> a
 foldr1 f as = foldr1_loop 0 where
   N n = length as
@@ -369,7 +384,7 @@ foldr' f !_b as = runST foldr'_go where
             foldr'_loop (i - 1) _b
     foldr'_loop (n - 1) _b
 
-foldr1' :: forall a b (n :: Dim). (Storable a, 'Sta 0 < n) =>
+foldr1' :: forall a (n :: Dim). (Storable a, 'Sta 0 < n) =>
            (a -> a -> a) -> V n a -> a
 foldr1' f as = runST foldr1'_go where
   foldr1'_go :: forall s. ST s a
@@ -535,43 +550,45 @@ fold1M' f as = do
 
 minIndex :: (Ord a, Storable a, 'Sta 1 <= n) => V n a -> I
 minIndex as =
-  fst $ execState (imapM_ minIndex_go tail_as) (0, unsafeIndex as 0)
+  fst $ State.execState (imapM_ minIndex_go tail_as) (0, unsafeIndex as 0)
   where
     tail_as = slice $(sta 1) (dyn $ toI (length as) - 1) as
-    minIndex_go !i a = get >>= \(_, amin) -> when (a < amin) (put (i, a))
+    minIndex_go !i a = State.get >>= \(_, amin) ->
+      when (a < amin) (State.put (i, a))
 
 minIndexBy :: (Storable a, 'Sta 1 <= n) => (a -> a -> Ordering) -> V n a -> I
 minIndexBy comp as =
-  fst $ execState (imapM_ minIndexBy_go tail_as) (0, unsafeIndex as 0)
+  fst $ State.execState (imapM_ minIndexBy_go tail_as) (0, unsafeIndex as 0)
   where
     tail_as = slice $(sta 1) (dyn $ toI (length as) - 1) as
     minIndexBy_go !i a = do
-      (_, amin) <- get
+      (_, amin) <- State.get
       case comp a amin of
-        LT -> put (i, a)
+        LT -> State.put (i, a)
         _ -> pure ()
 
 maxIndex :: (Ord a, Storable a, 'Sta 1 <= n) => V n a -> I
 maxIndex as =
-  fst $ execState (imapM_ maxIndex_go tail_as) (0, unsafeIndex as 0)
+  fst $ State.execState (imapM_ maxIndex_go tail_as) (0, unsafeIndex as 0)
   where
     tail_as = slice $(sta 1) (dyn $ toI (length as) - 1) as
-    maxIndex_go !i a = get >>= \(_, amax) -> when (a > amax) (put (i, a))
+    maxIndex_go !i a = State.get >>= \(_, amax) ->
+      when (a > amax) (State.put (i, a))
 
 maxIndexBy :: (Storable a, 'Sta 1 <= n) => (a -> a -> Ordering) -> V n a -> I
 maxIndexBy comp as =
-  fst $ execState (imapM_ maxIndexBy_go tail_as) (0, unsafeIndex as 0)
+  fst $ State.execState (imapM_ maxIndexBy_go tail_as) (0, unsafeIndex as 0)
   where
     tail_as = slice $(sta 1) (dyn $ toI (length as) - 1) as
     maxIndexBy_go !i a = do
-      (_, amax) <- get
+      (_, amax) <- State.get
       case comp a amax of
-        GT -> put (i, a)
+        GT -> State.put (i, a)
         _ -> pure ()
 
 unsafeFromList :: Storable a => N n -> [a] -> V n a
-unsafeFromList n = evalState (replicateM n unsafeFromList_go) where
-  unsafeFromList_go = get >>= \(a : as) -> put as >> pure a
+unsafeFromList n = State.evalState (replicateM n unsafeFromList_go) where
+  unsafeFromList_go = State.get >>= \(a : as) -> State.put as >> pure a
 
 fromList :: Storable a => [a] -> V 'Dyn a
 fromList as =
