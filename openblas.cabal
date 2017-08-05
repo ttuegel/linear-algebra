@@ -31,14 +31,11 @@ library
     , inline-c
     , parsers
     , primitive
-    , tagged
     , template-haskell
     , transformers
     , vector
   if flag(use-int64)
-    cpp-options: -DINT=int64_t
-  else
-    cpp-options: -DINT=int32_t
+    cpp-options: -DUSE_INT64
   exposed-modules:
       Data.Int.Blas
       Data.Vector.Blas
@@ -68,7 +65,6 @@ test-suite dblat
     , inline-c
     , parsers
     , primitive
-    , tagged
     , template-haskell
     , transformers
     , vector

@@ -8,9 +8,7 @@ import Language.Haskell.TH hiding (dyn)
 
 import qualified GHC.TypeLits as GHC
 
-#ifdef INT
-
-#if INT == int64_t
+#ifdef USE_INT64
 
 import Data.Int (Int64)
 
@@ -74,5 +72,3 @@ sta i = [| N $(litE (integerL i)) :: N ('Sta $(litT (numTyLit i))) |]
 
 dyn :: I -> N 'Dyn
 dyn = N
-
-#endif

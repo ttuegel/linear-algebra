@@ -52,10 +52,7 @@ library:
     - openblas
   when:
     - condition: flag(use-int64)
-      then:
-        cpp-options: -DINT=int64_t
-      else:
-        cpp-options: -DINT=int32_t
+      cpp-options: -DUSE_INT64
 
 tests:
   dblat:
