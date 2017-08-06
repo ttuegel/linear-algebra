@@ -67,4 +67,4 @@ tests:
     main: dblat.hs
     dependencies:
       - hedgehog
-      - openblas
+      - linear-algebra

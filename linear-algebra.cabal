@@ -73,5 +73,5 @@ test-suite dblat
     , transformers
     , vector
     , hedgehog
-    , openblas
+    , linear-algebra
   default-language: Haskell2010
