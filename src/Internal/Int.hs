@@ -1,12 +1,15 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Internal.Int where
+module Internal.Int
+    ( I, N(..)
+    , known
+    , type (<)
+    , module GHC.TypeNats
+    ) where
 
-import GHC.TypeLits (Nat)
+import GHC.TypeNats
 import Language.Haskell.TH hiding (dyn)
-
-import qualified GHC.TypeLits as GHC
 
 #ifdef USE_INT64
 
@@ -22,53 +25,13 @@ type I = Int32
 
 #endif
 
-newtype N (n :: Dim) = N { toI :: I }
-  deriving Show
+class (a + 1 <= b) => (<) (a :: Nat) (b :: Nat)
+instance (a + 1 <= b) => (<) (a :: Nat) (b :: Nat)
 
-data Dim where
-  Sta :: Nat -> Dim
-  Dyn :: Dim
+-- | @N n@ is a newtype wrapper of 'I' such that the wrapped integer
+-- @i :: I@ is at least zero, but less than the type index @n :: Nat@.
+newtype N (n :: Nat) = N { toI :: I }
+  deriving (Eq, Show)
 
-type family (+) (a :: Dim) (b :: Dim) :: Dim where
-  (+) ('Sta m) ('Sta n) = 'Sta (m GHC.+ n)
-  (+) 'Dyn _ = 'Dyn
-  (+) _ 'Dyn = 'Dyn
-
-class (<) (a :: Dim) (b :: Dim) where
-  lessThan :: N a -> N b -> Bool
-
-instance ((m GHC.+ 1) GHC.<= n) => (<) ('Sta m) ('Sta n) where
-  {-# INLINE lessThan #-}
-  lessThan _ _ = True
-
-instance (<) 'Dyn a where
-  {-# INLINE lessThan #-}
-  lessThan (N a) (N b) = a < b
-
-instance (<) a 'Dyn where
-  {-# INLINE lessThan #-}
-  lessThan (N a) (N b) = a < b
-
-class (<=) (a :: Dim) (b :: Dim) where
-  lessThanOrEqual :: N a -> N b -> Bool
-
-instance (m GHC.<= n) => (<=) ('Sta m) ('Sta n) where
-  {-# INLINE lessThanOrEqual #-}
-  lessThanOrEqual _ _ = True
-
-instance (<=) 'Dyn a where
-  {-# INLINE lessThanOrEqual #-}
-  lessThanOrEqual (N a) (N b) = a <= b
-
-instance (<=) a 'Dyn where
-  {-# INLINE lessThanOrEqual #-}
-  lessThanOrEqual (N a) (N b) = a <= b
-
-plus :: N a -> N b -> N (a + b)
-plus (N a) (N b) = N (a + b)
-
-sta :: Integer -> Q Exp
-sta i = [| N $(litE (integerL i)) :: N ('Sta $(litT (numTyLit i))) |]
-
-dyn :: I -> N 'Dyn
-dyn = N
+known :: Integer -> Q Exp
+known i = [| N $(litE (integerL i)) :: N $(litT (numTyLit i)) |]
