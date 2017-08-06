@@ -1,6 +1,6 @@
 { mkDerivation, base, containers, ghc-prim, hedgehog, inline-c
-, openblas, openblasCompat, parsers, primitive, stdenv
-, template-haskell, transformers, vector
+, openblasCompat, parsers, primitive, stdenv, template-haskell
+, transformers, vector
 }:
 mkDerivation {
   pname = "linear-algebra";
@@ -12,8 +12,8 @@ mkDerivation {
   ];
   librarySystemDepends = [ openblasCompat ];
   testHaskellDepends = [
-    base containers ghc-prim hedgehog inline-c openblas parsers
-    primitive template-haskell transformers vector
+    base containers ghc-prim hedgehog inline-c parsers primitive
+    template-haskell transformers vector
   ];
   homepage = "https://github.com/ttuegel/linear-algebra#readme";
   license = stdenv.lib.licenses.unfree;
