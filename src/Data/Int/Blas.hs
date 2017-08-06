@@ -1,4 +1,7 @@
-module Data.Int.Blas (module Internal.Int) where
+module Data.Int.Blas
+  ( module GHC.TypeNats
+  , module Internal.Int
+  ) where
 
-import Internal.Int
-       ( Dim(..), I, type (+), type (<)(..), type (<=)(..), sta, dyn )
+import GHC.TypeNats
+import Internal.Int (I, N, toI, known, bounded)

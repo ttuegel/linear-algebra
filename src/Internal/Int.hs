@@ -2,8 +2,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Internal.Int
-    ( I, N(..)
-    , known
+    ( I, N(..), toI
+    , known, bounded
     , type (<)
     , module GHC.TypeNats
     ) where
@@ -35,3 +35,10 @@ newtype N (n :: Nat) = N { toI :: I }
 
 known :: Integer -> Q Exp
 known i = [| N $(litE (integerL i)) :: N $(litT (numTyLit i)) |]
+
+bounded :: Integer -> Integer -> Q Exp
+bounded i n
+  | i < n = [| N $(litE (integerL i)) :: N $(litT (numTyLit n)) |]
+  | otherwise =
+      fail ("Argument i = " ++ show i ++ " must be less than bound n = "
+             ++ show n)

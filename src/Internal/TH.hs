@@ -17,7 +17,7 @@ import Language.Haskell.TH
 
 import qualified Data.Map as Map
 
-import Internal.Int (I, Dim, N(..))
+import Internal.Int (I, N(..))
 import Internal.Matrix
 import Internal.Mut
 import Internal.Vector (V(..))

@@ -68,13 +68,13 @@ unsafeSlice i nl (V _ fptr inc) =
   let fptr' = advanceForeignPtr fptr (fromIntegral $! i * inc) in
     V nl fptr' inc
 
-empty :: Storable a => V ('Sta 0) a
-empty = create (new $(sta 0))
+empty :: Storable a => V 0 a
+empty = create (new $(known 0))
 
-singleton :: Storable a => a -> V ('Sta 1) a
+singleton :: Storable a => a -> V 1 a
 singleton a = create $ do
-  mv <- new $(sta 1)
-  write mv $(sta 0) a
+  mv <- new $(known 1)
+  write mv $(bounded 0 1) a
   pure mv
 
 replicate :: Storable a => N n -> a -> V n a
@@ -153,7 +153,8 @@ generateM nn@(N n) get = runST (primitive generateM_go) where
                     (# _s, () #) -> generateM_loop _s (i - 1)
         in (# _s, generateM_loop _s (n - 1) #)
 
-iterateNM :: forall a m n. (Monad m, Storable a) =>
+iterateNM :: forall a m n.
+             (Monad m, Storable a) =>
              N n -> (a -> m a) -> a -> m (V n a)
 iterateNM nn@(N n) get _a = runST (primitive iterateNM_go) where
   iterateNM_go :: forall s.
@@ -301,7 +302,8 @@ izipWith3 f as bs cs =
             c <- unsafeIndexM cs i
             pure $ f i a b c)
 
-foldl :: forall a b (n :: Dim). Storable b => (a -> b -> a) -> a -> V n b -> a
+foldl :: forall a b n.
+         Storable b => (a -> b -> a) -> a -> V n b -> a
 foldl f _a bs = runST foldl_go where
   foldl_go :: forall s. ST s a
   foldl_go = do
@@ -314,7 +316,8 @@ foldl f _a bs = runST foldl_go where
             foldl_loop (i + 1) _a
     foldl_loop 0 _a
 
-foldl1 :: forall a (n :: Dim). (Storable a, 'Sta 0 < n) =>
+foldl1 :: forall a n.
+          (Storable a, 0 < n) =>
           (a -> a -> a) -> V n a -> a
 foldl1 f as = runST foldl1_go where
   foldl1_go :: forall s. ST s a
@@ -328,7 +331,7 @@ foldl1 f as = runST foldl1_go where
             foldl1_loop (i + 1) _a
     foldl1_loop 1 =<< unsafeIndexM as 0
 
-foldl' :: forall a b (n :: Dim). Storable b => (a -> b -> a) -> a -> V n b -> a
+foldl' :: forall a b n. Storable b => (a -> b -> a) -> a -> V n b -> a
 foldl' f !_a bs = runST foldl'_go where
   foldl'_go :: forall s. ST s a
   foldl'_go = do
@@ -341,7 +344,8 @@ foldl' f !_a bs = runST foldl'_go where
             foldl'_loop (i + 1) _a
     foldl'_loop 0 _a
 
-foldl1' :: forall a (n :: Dim). (Storable a, 'Sta 0 < n) =>
+foldl1' :: forall a n.
+           (Storable a, 0 < n) =>
            (a -> a -> a) -> V n a -> a
 foldl1' f as = runST foldl1'_go where
   foldl1'_go :: forall s. ST s a
@@ -355,14 +359,15 @@ foldl1' f as = runST foldl1'_go where
             foldl1'_loop (i + 1) _a
     foldl1'_loop 1 =<< unsafeIndexM as 0
 
-foldr :: forall a b (n :: Dim). Storable a => (a -> b -> b) -> b -> V n a -> b
+foldr :: forall a b n. Storable a => (a -> b -> b) -> b -> V n a -> b
 foldr f b as = foldr_loop 0 where
   N n = length as
   foldr_loop !i
     | i == n = b
     | otherwise = f (unsafeIndex as i) (foldr_loop (i + 1))
 
-foldr1 :: forall a (n :: Dim). (Storable a, 'Sta 0 < n) =>
+foldr1 :: forall a n.
+          (Storable a, 0 < n) =>
           (a -> a -> a) -> V n a -> a
 foldr1 f as = foldr1_loop 0 where
   N n = length as
@@ -371,7 +376,7 @@ foldr1 f as = foldr1_loop 0 where
     | i == end = unsafeIndex as i
     | otherwise = f (unsafeIndex as i) (foldr1_loop (i + 1))
 
-foldr' :: forall a b (n :: Dim). Storable a => (a -> b -> b) -> b -> V n a -> b
+foldr' :: forall a b n. Storable a => (a -> b -> b) -> b -> V n a -> b
 foldr' f !_b as = runST foldr'_go where
   foldr'_go :: forall s. ST s b
   foldr'_go = do
@@ -384,7 +389,8 @@ foldr' f !_b as = runST foldr'_go where
             foldr'_loop (i - 1) _b
     foldr'_loop (n - 1) _b
 
-foldr1' :: forall a (n :: Dim). (Storable a, 'Sta 0 < n) =>
+foldr1' :: forall a n.
+           (Storable a, 0 < n) =>
            (a -> a -> a) -> V n a -> a
 foldr1' f as = runST foldr1'_go where
   foldr1'_go :: forall s. ST s a
@@ -399,7 +405,8 @@ foldr1' f as = runST foldr1'_go where
     !_a <- unsafeIndexM as (n - 1)
     foldr1'_loop (n - 2) _a
 
-ifoldl :: forall a b (n :: Dim). Storable b =>
+ifoldl :: forall a b n.
+          Storable b =>
           (a -> I -> b -> a) -> a -> V n b -> a
 ifoldl f _a bs = runST ifoldl_go where
   ifoldl_go :: forall s. ST s a
@@ -413,7 +420,8 @@ ifoldl f _a bs = runST ifoldl_go where
             ifoldl_loop (i + 1) _a
     ifoldl_loop 0 _a
 
-ifoldl' :: forall a b (n :: Dim). Storable b =>
+ifoldl' :: forall a b n.
+           Storable b =>
            (a -> I -> b -> a) -> a -> V n b -> a
 ifoldl' f _a bs = runST ifoldl'_go where
   ifoldl'_go :: forall s. ST s a
@@ -427,7 +435,8 @@ ifoldl' f _a bs = runST ifoldl'_go where
             ifoldl'_loop (i + 1) _a
     ifoldl'_loop 0 _a
 
-ifoldr :: forall a b (n :: Dim). Storable a =>
+ifoldr :: forall a b n.
+          Storable a =>
           (I -> a -> b -> b) -> b -> V n a -> b
 ifoldr f b as = ifoldr_loop 0 where
   N n = length as
@@ -435,7 +444,8 @@ ifoldr f b as = ifoldr_loop 0 where
     | i == n = b
     | otherwise = f i (unsafeIndex as i) (ifoldr_loop (i + 1))
 
-ifoldr' :: forall a b (n :: Dim). Storable a =>
+ifoldr' :: forall a b n.
+           Storable a =>
            (I -> a -> b -> b) -> b -> V n a -> b
 ifoldr' f !_b as = runST ifoldr'_go where
   ifoldr'_go :: forall s. ST s b
@@ -467,20 +477,20 @@ sum = foldl' (+) 0
 product :: (Num a, Storable a) => V n a -> a
 product = foldl' (*) 1
 
-maximum :: ('Sta 0 < n, Ord a, Storable a) => V n a -> a
+maximum :: (Ord a, Storable a, 0 < n) => V n a -> a
 maximum = foldl1' max
 
-maximumBy :: ('Sta 0 < n, Storable a) => (a -> a -> Ordering) -> V n a -> a
+maximumBy :: (Storable a, 0 < n) => (a -> a -> Ordering) -> V n a -> a
 maximumBy comp = foldl1' maxBy where
   maxBy a b =
     case comp a b of
       LT -> b
       _ -> a
 
-minimum :: ('Sta 0 < n, Ord a, Storable a) => V n a -> a
+minimum :: (Ord a, Storable a, 0 < n) => V n a -> a
 minimum = foldl1' min
 
-minimumBy :: (Storable a, 'Sta 0 < n) => (a -> a -> Ordering) -> V n a -> a
+minimumBy :: (Storable a, 0 < n) => (a -> a -> Ordering) -> V n a -> a
 minimumBy comp = foldl1' minBy where
   minBy a b =
     case comp a b of
@@ -527,7 +537,7 @@ ifoldM' f _a bs = do
           ifoldM'_loop (i + 1) _a
   ifoldM'_loop 0 _a
 
-fold1M :: ('Sta 0 < n, Monad m, Storable a) => (a -> a -> m a) -> V n a -> m a
+fold1M :: (Monad m, Storable a, 0 < n) => (a -> a -> m a) -> V n a -> m a
 fold1M f as = do
   let
     N n = length as
@@ -536,7 +546,7 @@ fold1M f as = do
       | otherwise = f _a (unsafeIndex as i) >>= fold1M_loop (i + 1)
   fold1M_loop 1 (unsafeIndex as 0)
 
-fold1M' :: ('Sta 0 < n, Monad m, Storable a) => (a -> a -> m a) -> V n a -> m a
+fold1M' :: (Monad m, Storable a, 0 < n) => (a -> a -> m a) -> V n a -> m a
 fold1M' f as = do
   let
     N n = length as
@@ -548,15 +558,15 @@ fold1M' f as = do
     !_a = unsafeIndex as 0
   fold1M'_loop 1 _a
 
-minIndex :: (Ord a, Storable a, 'Sta 1 <= n) => V n a -> I
+minIndex :: (Ord a, Storable a, 0 < n) => V n a -> I
 minIndex as =
   fst $ State.execState (imapM_ minIndex_go tail_as) (0, unsafeIndex as 0)
   where
-    tail_as = slice $(sta 1) (dyn $ toI (length as) - 1) as
+    tail_as = slice $(known 1) (dyn $ toI (length as) - 1) as
     minIndex_go !i a = State.get >>= \(_, amin) ->
       when (a < amin) (State.put (i, a))
 
-minIndexBy :: (Storable a, 'Sta 1 <= n) => (a -> a -> Ordering) -> V n a -> I
+minIndexBy :: (Storable a, 0 < n) => (a -> a -> Ordering) -> V n a -> I
 minIndexBy comp as =
   fst $ State.execState (imapM_ minIndexBy_go tail_as) (0, unsafeIndex as 0)
   where
@@ -567,7 +577,7 @@ minIndexBy comp as =
         LT -> State.put (i, a)
         _ -> pure ()
 
-maxIndex :: (Ord a, Storable a, 'Sta 1 <= n) => V n a -> I
+maxIndex :: (Ord a, Storable a, 0 < n) => V n a -> I
 maxIndex as =
   fst $ State.execState (imapM_ maxIndex_go tail_as) (0, unsafeIndex as 0)
   where
@@ -575,7 +585,7 @@ maxIndex as =
     maxIndex_go !i a = State.get >>= \(_, amax) ->
       when (a > amax) (State.put (i, a))
 
-maxIndexBy :: (Storable a, 'Sta 1 <= n) => (a -> a -> Ordering) -> V n a -> I
+maxIndexBy :: (Storable a, 0 < n) => (a -> a -> Ordering) -> V n a -> I
 maxIndexBy comp as =
   fst $ State.execState (imapM_ maxIndexBy_go tail_as) (0, unsafeIndex as 0)
   where
@@ -590,17 +600,22 @@ unsafeFromList :: Storable a => N n -> [a] -> V n a
 unsafeFromList n = State.evalState (replicateM n unsafeFromList_go) where
   unsafeFromList_go = State.get >>= \(a : as) -> State.put as >> pure a
 
-fromList :: Storable a => [a] -> V 'Dyn a
-fromList as =
-  let n = Prelude.length as in
-    unsafeFromList (dyn $ fromIntegral n) as
+fromList :: forall a n. Storable a => [a] -> V n a
+fromList as
+  | lenActual == lenTyped = unsafeFromList n as
+  | otherwise =
+      error ("Data.Vector.Blas.fromList:\nArgument has length " ++ lenActual
+              ++ ", but the result type requires length " ++ lenTyped)
+
+  where
+    lenActual = Prelude.length as
+    lenTyped = fromIntegral (toI n)
+    n :: N n
+    n = N (fromIntegral (natVal (Proxy :: Proxy n)))
 
 litV :: Lift a => [a] -> Q Exp
 litV as =
   let
     n = fromIntegral (Prelude.length as)
   in
-    [| unsafeFromList $(sta n) $(lift as) |]
-
-toDynV :: V n a -> V 'Dyn a
-toDynV (V (N n) fptr inc) = V (N n) fptr inc
+    [| unsafeFromList $(known n) $(lift as) |]
