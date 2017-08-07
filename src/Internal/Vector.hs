@@ -1,127 +1,92 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 module Internal.Vector
-    ( V(..), Storable
-    , unsafeIndex, unsafeIndexPrim, unsafeIndexM
-    , new, thaw, freeze, copy
-    , unsafeNew, unsafeFreeze, unsafeThaw
-    , read, write, slice
+    ( V(..), bounds, Storable
+    , new, unsafeNew, copy, slice, ecils
+    , read, write
     , unsafeRead, unsafeWrite
-    , advanceForeignPtr
     ) where
 
 import Control.Monad (when)
+import Control.Monad.ST
 import Control.Monad.Primitive
-import Foreign.ForeignPtr
-       ( ForeignPtr, mallocForeignPtrArray, plusForeignPtr, withForeignPtr )
+import Foreign.ForeignPtr ( ForeignPtr, mallocForeignPtrArray, withForeignPtr )
 import Foreign.Storable (Storable, peekElemOff, pokeElemOff, sizeOf)
 import Prelude hiding (read)
 
 import Internal.Int
-import Internal.Mut
 
 
-data V (n :: Nat) a
+data V s (n :: Nat) a
   = V { vdim :: {-# UNPACK #-} !(N n)
       , vptr :: {-# UNPACK #-} !(ForeignPtr a)
+      , voff :: {-# UNPACK #-} !I
       , vinc :: {-# UNPACK #-} !I
       }
 
-indexIO :: Storable a => V n a -> N n -> IO a
-indexIO v (N i) = unsafeIndexIO v i
+bounds :: V s n a -> (N 0, N n)
+bounds (V {..}) = ($(known 0), vdim)
 
-unsafeIndexIO :: Storable a => V n a -> I -> IO a
-unsafeIndexIO (V {..}) i =
+unsafeNew :: Storable a => I -> ST s (V s n a)
+unsafeNew n =
+  unsafePrimToST $ do
+    vptr <- mallocForeignPtrArray (fromIntegral n)
+    let
+      vdim = N n
+      voff = 0
+      vinc = 1
+    pure V {..}
+
+new :: Storable a => N n -> ST s (V s n a)
+new n = unsafeNew (fromN n)
+
+read :: (Storable a, u <= n) => V s n a -> B l u -> ST s a
+read v i = unsafeRead v (fromB i)
+
+unsafeRead :: Storable a => V s n a -> I -> ST s a
+unsafeRead (V {..}) i =
+  unsafePrimToST $
   withForeignPtr vptr $ \ptr ->
-  peekElemOff ptr (fromIntegral (i * vinc))
+  peekElemOff ptr (fromIntegral (i * vinc + voff))
 
-indexPrim :: (PrimMonad m, Storable a) => V n a -> N n -> m a
-indexPrim v (N i) = unsafeIndexPrim v i
+write :: (Storable a, u <= n) => V s n a -> B l u -> a -> ST s ()
+write v i a = unsafeWrite v (fromB i) a
 
-unsafeIndexPrim :: (PrimMonad m, Storable a) => V n a -> I -> m a
-unsafeIndexPrim v i = unsafePrimToPrim (unsafeIndexIO v i)
+unsafeWrite :: Storable a => V s n a -> I -> a -> ST s ()
+unsafeWrite (V {..}) i a =
+  unsafePrimToST $
+  withForeignPtr vptr $ \ptr ->
+  pokeElemOff ptr (fromIntegral (i * vinc + voff)) a
 
-indexM :: (Monad m, Storable a) => V n a -> N n -> m a
-indexM v (N i) = unsafeIndexM v i
+slice :: (Storable a, i <= n, i + d * l <= n) => N i -> N l -> N d -> V s n a -> V s l a
+slice i vdim' vinc' v =
+  V { vdim = vdim'
+    , vptr = vptr v
+    , voff = voff v + fromN i * vinc v
+    , vinc = fromN vinc' * vinc v
+    }
 
-unsafeIndexM :: (Monad m, Storable a) => V n a -> I -> m a
-unsafeIndexM v i = (return . unsafeInlineIO) (unsafeIndexIO v i)
+ecils :: (Storable a, i <= n, i + d * l <= n + 1) =>
+         B 1 i  -- ^ index @b@, interpreted as a negative offset from @n@
+      -> N l  -- ^ length $l$ of result
+      -> N d  -- ^ stride $d$ of result, interpreted as a negative number
+      -> V s n a
+      -> V s l a
+ecils i vdim' vinc' v =
+  V { vdim = vdim'
+    , vptr = vptr v
+    , voff = voff v + (fromN (vdim v) - fromB i) * vinc v
+    , vinc = negate (fromN vinc') * vinc v
+    }
 
-index :: Storable a => V n a -> N n -> a
-index v (N i) = unsafeIndex v i
-
-unsafeIndex :: Storable a => V n a -> I -> a
-unsafeIndex v i = unsafeInlineIO (unsafeIndexIO v i)
-
-unsafeNew :: (PrimMonad m, Storable a) => I -> m (Mut (V n) (PrimState m) a)
-unsafeNew n = unsafePrimToPrim $ do
-  fp <- mallocForeignPtrArray (fromIntegral n)
-  pure (Mut (V (N n) fp 1))
-
-new :: (PrimMonad m, Storable a) => N n -> m (Mut (V n) (PrimState m) a)
-new (N n) = unsafeNew n
-
-unsafeThaw :: PrimMonad m => V n a -> m (Mut (V n) (PrimState m) a)
-unsafeThaw = pure . Mut
-
-thaw :: (PrimMonad m, Storable a) => V n a -> m (Mut (V n) (PrimState m) a)
-thaw as@(V n _ _) = do
-  bs <- new n
-  copy bs as
-  pure bs
-
-unsafeFreeze :: PrimMonad m => Mut (V n) (PrimState m) a -> m (V n a)
-unsafeFreeze (Mut v) = pure v
-
-freeze :: (PrimMonad m, Storable a) => Mut (V n) (PrimState m) a -> m (V n a)
-freeze as@(Mut (V n _ _)) = do
-  bs <- new n
-  let
-    freeze_go !i = do
-      unsafeRead as i >>= unsafeWrite bs i
-      when (i /= 0) (freeze_go (i - 1))
-  when (toI n > 0) (freeze_go (toI n - 1))
-  case bs of
-    Mut v -> pure v
-
-read :: (PrimMonad m, Storable a) => Mut (V n) (PrimState m) a -> N i -> m a
-read v (N i) = unsafeRead v i
-
-unsafeRead :: (PrimMonad m, Storable a) =>
-              Mut (V n) (PrimState m) a -> I -> m a
-unsafeRead (Mut (V {..})) i =
-  unsafePrimToPrim $ withForeignPtr vptr $ \ptr ->
-    peekElemOff ptr (fromIntegral $! i * vinc)
-
-write :: (PrimMonad m, Storable a) =>
-         Mut (V n) (PrimState m) a -> N n -> a -> m ()
-write v (N i) a = unsafeWrite v i a
-
-unsafeWrite :: (PrimMonad m, Storable a) =>
-               Mut (V n) (PrimState m) a -> I -> a -> m ()
-unsafeWrite (Mut (V {..})) i a =
-  unsafePrimToPrim $ withForeignPtr vptr $ \ptr ->
-    pokeElemOff ptr (fromIntegral $! i * vinc) a
-
-slice :: (Storable a, i < n, i + l <= n) =>
-         N i -> N l -> Mut (V n) s a -> Mut (V l) s a
-slice (N i) vdim' (Mut v) =
-  Mut V { vdim = vdim'
-        , vptr = advanceForeignPtr (vptr v) (fromIntegral $! i * vinc v)
-        , vinc = vinc v
-        }
-
-copy :: (PrimMonad m, Storable a) => Mut (V n) (PrimState m) a -> V n a -> m ()
-copy a@(Mut (V (N n) _ _)) b = do
+copy :: Storable a =>
+        V s n a  -- ^ destination
+     -> V s n a  -- ^ source
+     -> ST s ()
+copy dst src = do
   let
     copy_go !i = do
-      unsafeIndexPrim b i >>= unsafeWrite a i
+      unsafeRead src i >>= unsafeWrite dst i
       when (i /= 0) (copy_go (i - 1))
+    n = fromN (vdim dst)
   when (n > 0) (copy_go (n - 1))
-
-advanceForeignPtr
-  :: forall a. Storable a =>
-     ForeignPtr a
-  -> Int
-  -> ForeignPtr a
-advanceForeignPtr fptr n = plusForeignPtr fptr (n * size)
-  where
-    size = sizeOf (undefined :: a)

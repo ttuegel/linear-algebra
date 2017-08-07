@@ -17,7 +17,6 @@ default-extensions:
   - BangPatterns
   - DataKinds
   - DeriveDataTypeable
-  - DuplicateRecordFields
   - FlexibleContexts
   - FlexibleInstances
   - GADTs
@@ -34,16 +33,20 @@ default-extensions:
   - TypeFamilies
   - TypeOperators
   - UnboxedTuples
+  - ViewPatterns
 
 dependencies:
-  - base >= 4.10
+  - base
   - containers
+  - equational-reasoning
   - ghc-prim
+  - ghc-typelits-presburger
   - inline-c
   - parsers
   - primitive
   - template-haskell
   - transformers
+  - transformers-base
   - vector
 
 library:

@@ -1,7 +1,7 @@
 module Data.Int.Blas
-  ( module GHC.TypeNats
+  ( module GHC.TypeLits
   , module Internal.Int
   ) where
 
-import GHC.TypeNats
-import Internal.Int (I, N, toI, known, bounded)
+import GHC.TypeLits
+import Internal.Int (I, N, B, enumN, enumB, minB, maxB, known, bounded)

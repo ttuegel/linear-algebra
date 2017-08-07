@@ -24,7 +24,7 @@ transToI NoTrans = 111
 transToI Trans = 112
 transToI ConjTrans = 113
 
-data GE :: (Nat, Nat) -> * -> * where
+data GE :: * -> (Nat, Nat) -> * -> * where
   GE ::
     { getrans :: !Trans
     , gedim   :: {-# UNPACK #-} !(N m)
@@ -32,30 +32,30 @@ data GE :: (Nat, Nat) -> * -> * where
     , geptr   :: {-# UNPACK #-} !(ForeignPtr a)
     , gelead  :: {-# UNPACK #-} !I
     }
-    -> GE '(m, n) a
+    -> GE s '(m, n) a
 
-data GB :: (Nat, Nat) -> * -> * where
+data GB :: * -> (Nat, Nat) -> * -> * where
   GB ::
     { gbtrans     :: !Trans
     , gbdim       :: {-# UNPACK #-} !(N m)
     , gbcodim     :: {-# UNPACK #-} !(N n)
     , gbsubdiag   :: {-# UNPACK #-} !I
     , gbsuperdiag :: {-# UNPACK #-} !I
-    , gbptr       :: {-# UNPACK #-} !I
+    , gbptr       :: {-# UNPACK #-} !(ForeignPtr a)
     , gblead      :: {-# UNPACK #-} !I
     }
-    -> GB '(m, n) a
+    -> GB s '(m, n) a
 
-data HE :: (Nat, Nat) -> * -> * where
+data HE :: * -> (Nat, Nat) -> * -> * where
   HE ::
     { heuplo :: !UpLo
     , hedim  :: {-# UNPACK #-} !(N n)
     , heptr  :: {-# UNPACK #-} !(ForeignPtr a)
     , helead :: {-# UNPACK #-} !I
     }
-    -> HE '(n, n) a
+    -> HE s '(n, n) a
 
-data HB :: (Nat, Nat) -> * -> * where
+data HB :: * -> (Nat, Nat) -> * -> * where
   HB ::
     { hbuplo    :: !UpLo
     , hbdim     :: {-# UNPACK #-} !(N n)
@@ -63,17 +63,17 @@ data HB :: (Nat, Nat) -> * -> * where
     , hbptr     :: {-# UNPACK #-} !(ForeignPtr a)
     , hblead    :: {-# UNPACK #-} !I
     }
-    -> HB '(n, n) a
+    -> HB s '(n, n) a
 
-data HP :: (Nat, Nat) -> * -> * where
+data HP :: * -> (Nat, Nat) -> * -> * where
   HP ::
     { hpuplo :: !UpLo
     , hpdim  :: {-# UNPACK #-} !(N n)
     , hpptr  :: {-# UNPACK #-} !(ForeignPtr a)
     }
-    -> HP '(n, n) a
+    -> HP s '(n, n) a
 
-data TR :: (Nat, Nat) -> * -> * where
+data TR :: * -> (Nat, Nat) -> * -> * where
   TR ::
     { truplo  :: !UpLo
     , trtrans :: !Trans
@@ -82,9 +82,9 @@ data TR :: (Nat, Nat) -> * -> * where
     , trptr   :: {-# UNPACK #-} !(ForeignPtr a)
     , trlead  :: {-# UNPACK #-} !I  -- leading dimension
     }
-    -> TR '(n, n) a
+    -> TR s '(n, n) a
 
-data TB :: (Nat, Nat) -> * -> * where
+data TB :: * -> (Nat, Nat) -> * -> * where
   TB ::
     { tbuplo    :: !UpLo
     , tbtrans   :: !Trans
@@ -94,9 +94,9 @@ data TB :: (Nat, Nat) -> * -> * where
     , tbptr     :: {-# UNPACK #-} !(ForeignPtr a)
     , tblead    :: {-# UNPACK #-} !I  -- leading dimension
     }
-    -> TB '(n, n) a
+    -> TB s '(n, n) a
 
-data TP :: (Nat, Nat) -> * -> * where
+data TP :: * -> (Nat, Nat) -> * -> * where
   TP ::
     { tpuplo  :: !UpLo
     , tptrans :: !Trans
@@ -104,4 +104,4 @@ data TP :: (Nat, Nat) -> * -> * where
     , tpdim   :: {-# UNPACK #-} !(N n)  -- dimension
     , tpptr   :: {-# UNPACK #-} !(ForeignPtr a)
     }
-    -> TP '(n, n) a
+    -> TP s '(n, n) a

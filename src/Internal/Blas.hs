@@ -3,7 +3,7 @@
 
 module Internal.Blas where
 
-import Control.Monad.Primitive
+import Control.Monad.ST.Strict
 import Data.Complex
 import Foreign.C.Types (CSize(..))
 import Foreign.Marshal.Alloc (alloca)
@@ -11,7 +11,6 @@ import Foreign.Storable (Storable, peek)
 import Prelude hiding (length)
 
 import Internal.Matrix
-import Internal.Mut
 import Internal.TH
 import Internal.Vector
 
@@ -144,205 +143,183 @@ class Storable a => Scalar a where
   type RealPart a
 
   -- | Unconjugated inner (dot) product, @x^T x@.
-  dotu :: PrimMonad m => V n a -> V n a -> m a
+  dotu :: V s n a -> V s n a -> ST s a
 
   -- | Conjugated inner (dot) product, @x^H x@.
-  dotc :: PrimMonad m => V n a -> V n a -> m a
+  dotc :: V s n a -> V s n a -> ST s a
 
   -- | The sum of the real modulus of each element of the vector,
   -- @sum . map magnitude@.
-  asum :: PrimMonad m => V n a -> m (RealPart a)
+  asum :: V s n a -> ST s (RealPart a)
 
   -- | The Euclidean norm of the vector,
   -- @sqrt . sum . map (\x -> realPart (conjugate x * x))@
-  nrm2 :: PrimMonad m => V n a -> m (RealPart a)
+  nrm2 :: V s n a -> ST s (RealPart a)
 
   -- | The index of the element of the vector with the largest real
   -- modulus.
-  iamax :: PrimMonad m => V n a -> m CSize
+  iamax :: V s n a -> ST s CSize
 
   -- | @y <- a x + y@
   axpy
-    :: PrimMonad m =>
-       a  -- ^ scalar @a@
-    -> V n a  -- ^ vector @x@
-    -> Mut (V n) (PrimState m) a  -- ^ vector @y@
-    -> m ()
+    :: a  -- ^ scalar @a@
+    -> V s n a  -- ^ vector @x@
+    -> V s n a  -- ^ vector @y@
+    -> ST s ()
 
   -- | @x <- a x@
   scal
-    :: PrimMonad m =>
-       a  -- ^ scalar @a@
-    -> Mut (V n) (PrimState m) a  -- ^ vector @x@
-    -> m ()
+    :: a  -- ^ scalar @a@
+    -> V s n a  -- ^ vector @x@
+    -> ST s ()
 
   -- | @x <- a x@
   rscal
-    :: PrimMonad m =>
-       RealPart a  -- ^ scalar @a@
-    -> Mut (V n) (PrimState m) a  -- ^ vector @x@
-    -> m ()
+    :: RealPart a  -- ^ scalar @a@
+    -> V s n a  -- ^ vector @x@
+    -> ST s ()
 
   -- | @y <- x@
   copy
-    :: PrimMonad m =>
-       V n a  -- ^ vector @x@
-    -> Mut (V n) (PrimState m) a  -- ^ vector @y@
-    -> m ()
+    :: V s n a  -- ^ vector @x@
+    -> V s n a  -- ^ vector @y@
+    -> ST s ()
 
   -- | @(x, y) <- (y, x)
   swap
-    :: PrimMonad m =>
-       Mut (V n) (PrimState m) a  -- ^ vector @x@
-    -> Mut (V n) (PrimState m) a  -- ^ vector @y@
-    -> m ()
+    :: V s n a  -- ^ vector @x@
+    -> V s n a  -- ^ vector @y@
+    -> ST s ()
 
   -- | @y <- alpha A x + beta y@
   gbmv
-    :: PrimMonad m =>
-       a  -- ^ scalar @alpha@
-    -> GB j k a  -- ^ matrix @A@
-    -> V k a  -- ^ vector @x@
+    :: a  -- ^ scalar @alpha@
+    -> GB s '(j, k) a  -- ^ matrix @A@
+    -> V s k a  -- ^ vector @x@
     -> a  -- ^ scalar @beta@
-    -> Mut (V j) (PrimState m) a  -- ^ vector @y@
-    -> m ()
+    -> V s j a  -- ^ vector @y@
+    -> ST s ()
 
   -- | @y <- alpha A x + beta y@
   gemv
-    :: PrimMonad m =>
-       a  -- ^ scalar @alpha@
-    -> GE j k a  -- ^ matrix @A@
-    -> V k a  -- ^ vector @x@
+    :: a  -- ^ scalar @alpha@
+    -> GE s '(j, k) a  -- ^ matrix @A@
+    -> V s k a  -- ^ vector @x@
     -> a  -- ^ scalar @beta@
-    -> Mut (V j) (PrimState m) a  -- ^ vector @y@
-    -> m ()
+    -> V s j a  -- ^ vector @y@
+    -> ST s ()
 
   -- | @y <- alpha A x + beta y@
   hbmv
-    :: PrimMonad m =>
-       a  -- ^ scalar @alpha@
-    -> HB n a  -- ^ matrix @A@
-    -> V n a  -- ^ vector @x@
+    :: a  -- ^ scalar @alpha@
+    -> HB s '(n, n) a  -- ^ matrix @A@
+    -> V s n a  -- ^ vector @x@
     -> a  -- ^ scalar @beta@
-    -> Mut (V n) (PrimState m) a  -- ^ vector @y@
-    -> m ()
+    -> V s n a  -- ^ vector @y@
+    -> ST s ()
 
   -- | @y <- alpha A x + beta y@
   hemv
-    :: PrimMonad m =>
-       a
-    -> HE n a
-    -> V n a
+    :: a
+    -> HE s '(n, n) a
+    -> V s n a
     -> a
-    -> Mut (V n) (PrimState m) a
-    -> m ()
+    -> V s n a
+    -> ST s ()
 
   -- | @y <- alpha A x + beta y@
   hpmv
-    :: PrimMonad m =>
-       a
-    -> HP n a
-    -> V n a
+    :: a
+    -> HP s '(n, n) a
+    -> V s n a
     -> a
-    -> Mut (V n) (PrimState m) a
-    -> m ()
+    -> V s n a
+    -> ST s ()
 
   -- | @y <- alpha A x + beta y@
   tbmv
-    :: PrimMonad m =>
-       TB n a
-    -> Mut (V n) (PrimState m) a
-    -> m ()
+    :: TB s '(n, n) a
+    -> V s n a
+    -> ST s ()
 
   -- | @y <- alpha A x + beta y@
   tpmv
-    :: PrimMonad m =>
-       TP n a
-    -> Mut (V n) (PrimState m) a
-    -> m ()
+    :: TP s '(n, n) a
+    -> V s n a
+    -> ST s ()
 
   -- | @y <- alpha A x + beta y@
   trmv
-    :: PrimMonad m =>
-       TR n a
-    -> Mut (V n) (PrimState m) a
-    -> m ()
+    :: TR s '(n, n) a
+    -> V s n a
+    -> ST s ()
 
   -- | Compute the solution of a system of linear equations,
   -- @y <- x@ where @A x = y@.
   tbsv
-    :: PrimMonad m =>
-       TB n a
-    -> Mut (V n) (PrimState m) a
-    -> m ()
+    :: TB s '(n, n) a
+    -> V s n a
+    -> ST s ()
 
   -- | Compute the solution of a system of linear equations,
   -- @y <- x@ where @A x = y@.
   tpsv
-    :: PrimMonad m =>
-       TP n a
-    -> Mut (V n) (PrimState m) a
-    -> m ()
+    :: TP s '(n, n) a
+    -> V s n a
+    -> ST s ()
 
   -- | Compute the solution of a system of linear equations,
   -- @y <- x@ where @A x = y@.
   trsv
-    :: PrimMonad m =>
-       TR n a
-    -> Mut (V n) (PrimState m) a
-    -> m ()
+    :: TR s '(n, n) a
+    -> V s n a
+    -> ST s ()
 
   -- | @A <- alpha x y^T + A@
   geru
-    :: PrimMonad m =>
-       a
-    -> V j a
-    -> V k a
-    -> Mut (GE j k) (PrimState m) a
-    -> m ()
+    :: a
+    -> V s j a
+    -> V s k a
+    -> GE s '(j, k) a
+    -> ST s ()
 
   -- | @A <- alpha x y^H + A@
   gerc
-    :: PrimMonad m =>
-       a
-    -> V j a
-    -> V k a
-    -> Mut (GE j k) (PrimState m) a
-    -> m ()
+    :: a
+    -> V s j a
+    -> V s k a
+    -> GE s '(j, k) a
+    -> ST s ()
 
   -- | @A <- alpha x x^H + A@
   her
-    :: PrimMonad m =>
-       RealPart a
-    -> V n a
-    -> Mut (HE n) (PrimState m) a
-    -> m ()
+    :: RealPart a
+    -> V s n a
+    -> HE s '(n, n) a
+    -> ST s ()
 
   -- | @A <- alpha x y^H + conj(alpha) y x^H + A@
   her2
-    :: PrimMonad m =>
-       a
-    -> V n a
-    -> V n a
-    -> Mut (HE n) (PrimState m) a
-    -> m ()
+    :: a
+    -> V s n a
+    -> V s n a
+    -> HE s '(n, n) a
+    -> ST s ()
 
   -- | @A <- alpha x x^H + A@
   hpr
-    :: PrimMonad m =>
-       RealPart a
-    -> V n a
-    -> Mut (HP n) (PrimState m) a
-    -> m ()
+    :: RealPart a
+    -> V s n a
+    -> HP s '(n, n) a
+    -> ST s ()
 
   -- | @A <- alpha x y^H + conj(alpha) y x^H + A@
   hpr2
-    :: PrimMonad m =>
-       a
-    -> V n a
-    -> V n a
-    -> Mut (HP n) (PrimState m) a
-    -> m ()
+    :: a
+    -> V s n a
+    -> V s n a
+    -> HP s '(n, n) a
+    -> ST s ()
 
 instance Scalar Float where
   type RealPart Float = Float
