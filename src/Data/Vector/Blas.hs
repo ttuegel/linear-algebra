@@ -21,7 +21,7 @@ module Data.Vector.Blas
   , all, any, and, or, sum, product
   , maximum, maximumBy, minimum, minimumBy
   , minIndex, minIndexBy, maxIndex, maxIndexBy
-  , unsafeFromList, fromList, litV
+  , unsafeFromList, fromList, toList, litV
   ) where
 
 import Control.Applicative hiding (empty)
@@ -426,6 +426,9 @@ fromList n as
   where
     lenActual = Prelude.length as
     lenTyped = fromIntegral (fromN n)
+
+toList :: Storable a => V s n a -> ST s [a]
+toList = foldr (:) []
 
 litV :: TH.Lift a => [a] -> Q Exp
 litV as =
