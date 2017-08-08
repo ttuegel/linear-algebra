@@ -2,7 +2,7 @@
 
 module Internal.Vector
     ( V(..), bounds, Storable
-    , new, unsafeNew, copy, slice, ecils
+    , new, unsafeNew, copy, slice
     , read, write
     , unsafeRead, unsafeWrite
     ) where
@@ -11,7 +11,7 @@ import Control.Monad (when)
 import Control.Monad.ST
 import Control.Monad.Primitive
 import Foreign.ForeignPtr ( ForeignPtr, mallocForeignPtrArray, withForeignPtr )
-import Foreign.Storable (Storable, peekElemOff, pokeElemOff, sizeOf)
+import Foreign.Storable (Storable, peekElemOff, pokeElemOff)
 import Prelude hiding (read)
 
 import Internal.Int
@@ -64,19 +64,6 @@ slice i vdim' vinc' v =
     , vptr = vptr v
     , voff = voff v + fromN i * vinc v
     , vinc = fromN vinc' * vinc v
-    }
-
-ecils :: (Storable a, i <= n, i + d * l <= n + 1) =>
-         B 1 i  -- ^ index @b@, interpreted as a negative offset from @n@
-      -> N l  -- ^ length $l$ of result
-      -> N d  -- ^ stride $d$ of result, interpreted as a negative number
-      -> V s n a
-      -> V s l a
-ecils i vdim' vinc' v =
-  V { vdim = vdim'
-    , vptr = vptr v
-    , voff = voff v + (fromN (vdim v) - fromB i) * vinc v
-    , vinc = negate (fromN vinc') * vinc v
     }
 
 copy :: Storable a =>
