@@ -58,7 +58,7 @@ unsafeWrite (V {..}) i a =
   withForeignPtr vptr $ \ptr ->
   pokeElemOff ptr (fromIntegral (i * vinc + voff)) a
 
-slice :: (Storable a, i <= n, i + d * l <= n) => N i -> N l -> N d -> V s n a -> V s l a
+slice :: (Storable a, i <= n, i + 1 + d * l <= n + d) => N i -> N l -> N d -> V s n a -> V s l a
 slice i vdim' vinc' v =
   V { vdim = vdim'
     , vptr = vptr v
