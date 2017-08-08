@@ -3,7 +3,7 @@
 {-# OPTIONS_GHC -fplugin GHC.TypeLits.Presburger #-}
 
 module Data.Vector.Blas
-  ( V
+  ( V, new, read, write
   , length, null, slice, create
   , empty, singleton
   , replicate, generate, iterateN
