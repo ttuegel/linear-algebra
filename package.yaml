@@ -54,6 +54,7 @@ library:
   exposed-modules:
     - Data.Int.Blas
     - Data.Vector.Blas
+    - Numeric.LinearAlgebra.Blas
   extra-libraries:
     - openblas
   when:

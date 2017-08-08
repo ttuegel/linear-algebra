@@ -43,6 +43,7 @@ library
   exposed-modules:
       Data.Int.Blas
       Data.Vector.Blas
+      Numeric.LinearAlgebra.Blas
   other-modules:
       Internal.Blas
       Internal.Endo
