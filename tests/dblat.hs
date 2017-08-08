@@ -153,5 +153,26 @@ prop_nrm2_known = property $ do
   annotateShow n2s
   assert $ and (zipWith (\c t -> equiv t c t) n2s true)
 
+prop_nrm2_interleave :: Property
+prop_nrm2_interleave = property $ do
+  _as <- forAll $ Gen.list (Range.singleton 5) (Gen.double (Range.constant (-1) 1))
+  _bs <- forAll $ Gen.list (Range.singleton 5) (Gen.double (Range.constant (-1) 1))
+  let
+    anrm1 = runST $ dnrm2 =<< V.fromList $(known 5) _as
+    bnrm1 = runST $ dnrm2 =<< V.fromList $(known 5) _bs
+    (anrm2, bnrm2) = runST $ do
+      _as <- V.fromList $(known 5) _as
+      _bs <- V.fromList $(known 5) _bs
+      _cs <- V.new $(known 10)
+      copy _as (V.slice $(known 0) $(known 5) $(known 2) _cs)
+      copy _bs (V.slice $(known 1) $(known 5) $(known 2) _cs)
+      (,)
+        <$> dnrm2 (V.slice $(known 0) $(known 5) $(known 2) _cs)
+        <*> dnrm2 (V.slice $(known 1) $(known 5) $(known 2) _cs)
+  annotateShow (anrm1, anrm2)
+  anrm1 === anrm2
+  annotateShow (bnrm1, bnrm2)
+  bnrm1 === bnrm2
+
 main :: IO ()
 main = void $ checkParallel $$(discover)
