@@ -71,6 +71,37 @@ prop_nrm2_singleton_slice = property $ do
   annotateShow t
   assert $ equiv 0.0 t (abs (head as))
 
+prop_nrm2_reverse :: Property
+prop_nrm2_reverse = property $ do
+  as <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  let
+    (s, t) = runST $ do
+      v :: V s 10 Double <- V.unsafeFromList $(known 10) as
+      v' <- V.reverse v
+      (,) <$> nrm2 v <*> nrm2 v'
+  annotateShow s
+  annotateShow t
+  assert $ equiv 0.0 s t
+
+prop_fromList_toList :: Property
+prop_fromList_toList = property $ do
+  as <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  let
+    as' = runST $ do
+      v :: V s 10 Double <- V.fromList $(known 10) as
+      V.toList v
+  annotateShow as'
+  as === as'
+
+prop_reverse_reverse :: Property
+prop_reverse_reverse = property $ do
+  as <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  let
+    as' = runST $ do
+      v :: V s 10 Double <- V.fromList $(known 10) as
+      V.toList =<< V.reverse =<< V.reverse v
+  annotateShow as'
+  as === as'
 
 main :: IO ()
 main = void $ checkParallel $$(discover)
