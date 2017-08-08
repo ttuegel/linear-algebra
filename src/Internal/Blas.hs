@@ -16,8 +16,10 @@ import Internal.Vector
 
 cblas_dot [t| Float |] "sdot"
 cblas_dot [t| Double |] "ddot"
-cblas_dot [t| Complex Float |] "cdot"
-cblas_dot [t| Complex Double |] "zdot"
+cblas_dot [t| Complex Float |] "cdotu"
+cblas_dot [t| Complex Float |] "cdotc"
+cblas_dot [t| Complex Double |] "zdotu"
+cblas_dot [t| Complex Double |] "zdotc"
 
 cblas_asum [t| Float |] [t| Float |] "snrm2"
 cblas_asum [t| Float |] [t| Float |] "sasum"
@@ -383,8 +385,8 @@ instance Scalar Double where
 
 instance Scalar (Complex Float) where
   type RealPart (Complex Float) = Float
-  dotu = cdot
-  dotc = cdot
+  dotu = cdotu
+  dotc = cdotc
   asum = scasum
   nrm2 = scnrm2
   iamax = icamax
@@ -413,8 +415,8 @@ instance Scalar (Complex Float) where
 
 instance Scalar (Complex Double) where
   type RealPart (Complex Double) = Double
-  dotu = zdot
-  dotc = zdot
+  dotu = zdotu
+  dotc = zdotc
   asum = dzasum
   nrm2 = dznrm2
   iamax = izamax
