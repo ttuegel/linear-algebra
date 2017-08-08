@@ -2,30 +2,75 @@
 
 module Main where
 
+import Control.Monad (void)
+import Control.Monad.ST.Strict
 import Hedgehog
 
+import qualified Hedgehog.Gen as Gen
+import qualified Hedgehog.Range as Range
+
+import Data.Int.Blas
 import Data.Vector.Blas as V
+import Numeric.LinearAlgebra.Blas
 
-testV :: V n a -> V n a -> V n a -> a -> PropertyT IO ()
-testV comp true size sfac = do
-  let failed c t z = let sd = c - t in abs z + abs (sfac * sd) - z /= 0.0
-  assert $ (not . V.or) (V.zipWith3 failed comp true size)
-
-check1 :: Property
-check1 = property $ do
-  (incx, incy) <- element [(1, 1), (2, -2), (-2, 1), (-1, -2)]
-  let
-    mx = abs incx
-    my = abs incy
-  (n, ksize) <- element [(0, 1), (1, 2), (2, 2), (4, 2)]
+equiv :: Double  -- ^ size
+      -> Double  -- ^ test value
+      -> Double  -- ^ true value
+      -> Bool
+equiv sz comp true = abs sz + abs (sfac * (comp - true)) - sz == 0
   where
-    dx1 = $(litV [0.6, 0.1, -0.5, 0.8, 0.9, -0.3, -0.4])
-    dy1 = $(litV [0.5, -0.9, 0.3, 0.7, -0.6, 0.2, 0.8])
-    dt7 = $(litV [0.0, 0.30, 0.21, 0.62, 0.0, 0.30, -0.07, 0.85, 0.0, 0.30, -0.79, -0.74, 0.0, 0.30, 0.33, 1.27])
-    dt8 = $(litV [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.68, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.68, -0.87, 0.0, 0.0, 0.0, 0.0, 0.0, 0.68, -0.87, 0.15, 0.94, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.68, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.35, -0.9, 0.48, 0.0, 0.0, 0.0, 0.0, 0.38, -0.9, 0.57, 0.7, -0.75, 0.2, 0.98, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.68, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.35, -0.72, 0.0, 0.0, 0.0, 0.0, 0.0, 0.38, -0.63, 0.15, 0.88, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.68, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.68, -0.9, 0.33, 0.0, 0.0, 0.0, 0.0, 0.68, -0.9, 0.33, 0.7, -0.75, 0.2, 1.04])
-    dt9x = $(litV [0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.78, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.78, -0.46, 0.0, 0.0, 0.0, 0.0, 0.0, 0.78, -0.46, -0.22, 1.06, 0.0, 0.0, 0.0, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.78, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.66, 0.1, -0.1, 0.0, 0.0, 0.0, 0.0, 0.96, 0.1, -0.76, 0.8, 0.90, -0.3, -0.02, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.78, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.06, 0.1, -0.1, 0.0, 0.0, 0.0, 0.0, 0.90, 0.1, -0.22, 0.8, 0.18, -0.3, -0.02, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.78, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.78, 0.26, 0.0, 0.0, 0.0, 0.0, 0.0, 0.78, 0.26, -0.76, 1.12, 0.0, 0.0, 0.0])
-    dt9y = $(litV [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.04, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.04, -0.78, 0.0, 0.0, 0.0, 0.0, 0.0, 0.04, -0.78, 0.54, 0.08, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.04, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.7, -0.9, -0.12, 0.0, 0.0, 0.0, 0.0, 0.64, -0.9, -0.30, 0.7, -0.18, 0.2, 0.28, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.04, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.7, -1.08, 0.0, 0.0, 0.0, 0.0, 0.0, 0.64, -1.26, 0.54, 0.20, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.04, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.04, -0.9, 0.18, 0.0, 0.0, 0.0, 0.0, 0.04, -0.9, 0.18, 0.7, -0.18, 0.2, 0.16])
-    dt10x = $(litV [0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, -0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, -0.9, 0.3, 0.7, 0.0, 0.0, 0.0, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.1, 0.5, 0.0, 0.0, 0.0, 0.0, 0.8, 0.1, -0.6, 0.8, 0.3, -0.3, 0.5, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.9, 0.1, 0.5, 0.0, 0.0, 0.0, 0.0, 0.7, 0.1, 0.3, 0.8, -0.9, -0.3, 0.5, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.3, -0.6, 0.8, 0.0, 0.0, 0.0])
-    dt10y = $(litV [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6, 0.1, -0.5, 0.8, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.5, -0.9, 0.6, 0.0, 0.0, 0.0, 0.0, -0.4, -0.9, 0.9, 0.7, -0.5, 0.2, 0.6, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, -0.4, 0.9, -0.5, 0.6, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6, -0.9, 0.1, 0.0, 0.0, 0.0, 0.0, 0.6, -0.9, 0.1, 0.7, -0.5, 0.2, 0.8])
-    ssize1 = $(litV [0.0, 0.3, 1.6, 3.2])
-    ssize2 = $(litV [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.17, 1.17, 1.17, 1.17, 1.17, 1.17, 1.17, 1.17, 1.17, 1.17, 1.17, 1.17, 1.17, 1.17])
+    sfac = 9.765625E-4
+
+prop_nrm2_empty_lit :: Property
+prop_nrm2_empty_lit = property $ do
+  let
+    t = runST $ do
+      v :: V s 0 Double <- $(litV ([] :: [Double]))
+      nrm2 v
+  annotateShow t
+  assert $ equiv 0.0 t 0.0
+
+prop_nrm2_empty :: Property
+prop_nrm2_empty = property $ do
+  let
+    t = runST $ do
+      v :: V s 0 Double <- V.empty
+      nrm2 v
+  annotateShow t
+  assert $ equiv 0.0 t 0.0
+
+prop_nrm2_empty_slice :: Property
+prop_nrm2_empty_slice = property $ do
+  as <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  let
+    t = runST $ do
+      vlong :: V s 10 Double <- V.unsafeFromList $(known 10) as
+      let v = V.slice $(known 0) $(known 0) $(known 1) vlong
+      nrm2 v
+  annotateShow t
+  assert $ equiv 0.0 t 0.0
+
+prop_nrm2_singleton :: Property
+prop_nrm2_singleton = property $ do
+  a <- forAll $ Gen.double (Range.constant (-1) 1)
+  let
+    t = runST $ do
+      v :: V s 1 Double <- V.singleton a
+      nrm2 v
+  annotateShow t
+  assert $ equiv 0.0 t (abs a)
+
+prop_nrm2_singleton_slice :: Property
+prop_nrm2_singleton_slice = property $ do
+  as <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  let
+    t = runST $ do
+      vlong :: V s 10 Double <- V.unsafeFromList $(known 10) as
+      let v = V.slice $(known 0) $(known 1) $(known 1) vlong
+      nrm2 v
+  annotateShow t
+  assert $ equiv 0.0 t (abs (head as))
+
+
+main :: IO ()
+main = void $ checkParallel $$(discover)
