@@ -126,8 +126,8 @@ concat as bs =
 force :: Storable a => V s n a -> ST s (V s n a)
 force as = create (length as) (\forced -> copy forced as)
 
-reverse :: Storable a => V s (n + 1) a -> V s (n + 1) a
-reverse as = ecils (minB ($(known 1), $(known 1))) (length as) $(known 1) as
+reverse :: Storable a => V s (n + 1) a -> ST s (V s (n + 1) a)
+reverse as = generateM (length as) (\i -> read as (reverseB (bounds as) i))
 
 imap :: (Storable a, Storable b) => (B 0 n -> a -> b) -> V s n a -> ST s (V s n b)
 imap f as = generateM (length as) (\i -> f i <$> read as i)
