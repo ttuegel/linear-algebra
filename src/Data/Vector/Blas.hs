@@ -27,7 +27,7 @@ module Data.Vector.Blas
 import Control.Applicative hiding (empty)
 import Control.Monad hiding (foldM, forM_, mapM, mapM_, replicateM, zipWithM, zipWithM_)
 import Control.Monad.Base
-import Control.Monad.ST
+import Control.Monad.ST.Strict
 import Data.Bool
 import Data.Eq
 import Data.Function
