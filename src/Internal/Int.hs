@@ -2,7 +2,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Internal.Int
-    ( I, N(..), B(..), enumN, enumB, minB, maxB
+    ( I, N(..), B(..), enumN, enumB, minB, maxB, reverseB
     , known, bounded, fromProxy, toProxy
     , type (<)
     , module GHC.TypeLits
@@ -91,3 +91,6 @@ maxB (_, N u) = B (u - 1)
 
 minB :: (l <= u) => (N l, N u) -> B l u
 minB (N l, _) = B l
+
+reverseB :: (l <= u) => (N l, N u) -> B l u -> B l u
+reverseB (N l, N u) (B b) = B (u - 1 - (b - l))
