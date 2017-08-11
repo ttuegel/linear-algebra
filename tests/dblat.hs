@@ -329,39 +329,52 @@ prop_iamax_known = property $ do
   comp knownData1 === true
   comp knownData2 === true
 
-prop_scal_known :: Property
-prop_scal_known = property $ do
+prop_scal_identity :: Property
+prop_scal_identity = property $ do
+  as <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
   let
-    scal1 = [0.3E0, -1.0E0, 0.0E0, 1.0E0, 0.3E0]
-    scal2 = [0.3E0, 0.3E0, 0.3E0, 0.3E0, 0.3E0]
-    true :: (forall s. ST s (Known s)) -> [[Double]]
-    true dat = runST $ do
-      Known {..} <- dat
-      sequence
-        [ V.toList dv1
-        , V.toList dv2
-        , V.toList dv3
-        , V.toList dv4
-        , V.toList dv5
-        ]
-    comp :: [Double] -> (forall s. ST s (Known s)) -> [[Double]]
-    comp scals dat = runST $ do
-      let [s1, s2, s3, s4, s5] = scals
-      Known {..} <- dat
-      dscal s1 dv1
-      dscal s2 dv2
-      dscal s3 dv3
-      dscal s4 dv4
-      dscal s5 dv5
-      sequence
-        [ V.toList dv1
-        , V.toList dv2
-        , V.toList dv3
-        , V.toList dv4
-        , V.toList dv5
-        ]
-  true knownScaled1 === comp scal1 knownData1
-  true knownScaled2 === comp scal2 knownData2
+    as' = runST $ do
+      _as <- V.fromList $(known 10) as
+      dscal 1.0 _as
+      V.toList _as
+  as === as'
+
+prop_scal_null :: Property
+prop_scal_null = property $ do
+  as <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  let
+    as' = runST $ do
+      _as <- V.fromList $(known 10) as
+      dscal 0.0 _as
+      V.toList _as
+  map (const 0.0) as === as'
+
+prop_scal_commute :: Property
+prop_scal_commute = property $ do
+  a <- forAll $ Gen.double (Range.constant (-1) 1)
+  b <- forAll $ Gen.double (Range.constant (-1) 1)
+  as <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  let
+    (ab, ba) = runST $ do
+      _as <- V.fromList $(known 10) as
+      _bs <- V.fromList $(known 10) as
+      dscal a _as
+      dscal b _as
+      dscal b _bs
+      dscal a _bs
+      (,) <$> V.toList _as <*> V.toList _bs
+  ab === ba
+
+prop_scal_singleton :: Property
+prop_scal_singleton = property $ do
+  a <- forAll $ Gen.double (Range.constant (-1) 1)
+  b <- forAll $ Gen.double (Range.constant (-1) 1)
+  let
+    ab = runST $ do
+      v <- V.singleton a
+      dscal b v
+      V.read v (bounded $(known 0) $(known 0) $(known 1))
+  a * b === ab
 
 main :: IO ()
 main = void $ checkParallel $$(discover)
