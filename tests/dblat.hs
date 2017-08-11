@@ -31,10 +31,10 @@ dscal = scal
 equiv :: Double  -- ^ test value
       -> Double  -- ^ true value
       -> Bool
-equiv comp true = abs sz + abs (sfac * (comp - true)) - sz == 0
+equiv comp true = sz + abs (sfac * (comp - true)) - sz == 0
   where
     sfac = 9.765625E-4
-    sz = true
+    sz = abs true
 
 prop_nrm2_empty_lit :: Property
 prop_nrm2_empty_lit = property $ do
@@ -363,7 +363,9 @@ prop_scal_commute = property $ do
       dscal b _bs
       dscal a _bs
       (,) <$> V.toList _as <*> V.toList _bs
-  ab === ba
+  annotateShow ab
+  annotateShow ba
+  assert $ and $ zipWith equiv ab ba
 
 prop_scal_singleton :: Property
 prop_scal_singleton = property $ do
@@ -375,6 +377,75 @@ prop_scal_singleton = property $ do
       dscal b v
       V.read v (bounded $(known 0) $(known 0) $(known 1))
   a * b === ab
+
+prop_copy :: Property
+prop_copy = property $ do
+  as <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  let
+    as' = runST $ do
+      _as <- V.fromList $(known 10) as
+      _bs <- V.new $(known 10)
+      V.copy _bs _as
+      V.toList _bs
+  as === as'
+
+prop_swap :: Property
+prop_swap = property $ do
+  as <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  bs <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  let
+    (as', bs') = runST $ do
+      _as <- V.fromList $(known 10) as
+      _bs <- V.fromList $(known 10) bs
+      swap _as _bs
+      (,) <$> V.toList _as <*> V.toList _bs
+  as === bs'
+  bs === as'
+
+prop_axpy_commute :: Property
+prop_axpy_commute = property $ do
+  a <- forAll $ Gen.double (Range.constant (-1) 1)
+  as <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  b <- forAll $ Gen.double (Range.constant (-1) 1)
+  bs <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  cs <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  let
+    (ab, ba) = runST $ do
+      _as <- V.fromList $(known 10) as
+      _bs <- V.fromList $(known 10) bs
+      _ab <- V.fromList $(known 10) cs
+      axpy a _as _ab
+      axpy b _bs _ab
+      _ba <- V.fromList $(known 10) cs
+      axpy b _bs _ba
+      axpy a _as _ba
+      (,) <$> V.toList _ab <*> V.toList _ba
+  annotateShow ab
+  annotateShow ba
+  assert $ and $ zipWith equiv ab ba
+
+prop_axpy_identity :: Property
+prop_axpy_identity = property $ do
+  as <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  bs <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  let
+    as' = runST $ do
+      _as <- V.fromList $(known 10) as
+      _bs <- V.fromList $(known 10) bs
+      axpy 0.0 _bs _as
+      V.toList _as
+  as === as'
+
+prop_axpy_null :: Property
+prop_axpy_null = property $ do
+  as <- forAll $ Gen.list (Range.singleton 10) (Gen.double (Range.constant (-1) 1))
+  let
+    as' = runST $ do
+      _as <- V.fromList $(known 10) as
+      _bs <- V.fromList $(known 10) as
+      axpy (-1) _bs _as
+      V.toList _as
+  map (const 0.0) as === as'
 
 main :: IO ()
 main = void $ checkParallel $$(discover)
