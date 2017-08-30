@@ -118,88 +118,6 @@ prop_reverse_reverse = property $ do
   annotateShow as'
   as === as'
 
-data Known s
-  = Known
-  { dv1 :: V s 0 Double
-  , dv2 :: V s 1 Double
-  , dv3 :: V s 2 Double
-  , dv4 :: V s 3 Double
-  , dv5 :: V s 4 Double
-  }
-
-knownData1 :: ST s (Known s)
-knownData1 = do
-  dv1 <- V.slice $(known 0) $(known 0) $(known 1)
-         <$> $(litV [0.1E0, 2.0E0, 2.0E0, 2.0E0, 2.0E0, 2.0E0, 2.0E0, 2.0E0 :: Double])
-  dv2 <- V.slice $(known 0) $(known 1) $(known 1)
-         <$> $(litV [0.3E0, 3.0E0, 3.0E0, 3.0E0, 3.0E0, 3.0E0, 3.0E0, 3.0E0 :: Double])
-  dv3 <- V.slice $(known 0) $(known 2) $(known 1)
-         <$> $(litV [0.3E0, -0.4E0, 4.0E0, 4.0E0, 4.0E0, 4.0E0, 4.0E0, 4.0E0 :: Double])
-  dv4 <- V.slice $(known 0) $(known 3) $(known 1)
-         <$> $(litV [0.2E0, -0.6E0, 0.3E0, 5.0E0, 5.0E0, 5.0E0, 5.0E0, 5.0E0 :: Double])
-  dv5 <- V.slice $(known 0) $(known 4) $(known 1)
-         <$> $(litV [0.1E0, -0.3E0, 0.5E0, -0.1E0, 6.0E0, 6.0E0, 6.0E0, 6.0E0 :: Double])
-  pure Known {..}
-
-knownScaled1 :: ST s (Known s)
-knownScaled1 = do
-  dv1 <- V.slice $(known 0) $(known 0) $(known 1)
-         <$> $(litV [0.10E0, 2.0E0, 2.0E0, 2.0E0, 2.0E0, 2.0E0, 2.0E0, 2.0E0 :: Double])
-  dv2 <- V.slice $(known 0) $(known 1) $(known 1)
-         <$> $(litV [-0.3E0, 3.0E0, 3.0E0, 3.0E0, 3.0E0, 3.0E0, 3.0E0, 3.0E0 :: Double])
-  dv3 <- V.slice $(known 0) $(known 2) $(known 1)
-         <$> $(litV [0.0E0, 0.0E0, 4.0E0, 4.0E0, 4.0E0, 4.0E0, 4.0E0, 4.0E0 :: Double])
-  dv4 <- V.slice $(known 0) $(known 3) $(known 1)
-         <$> $(litV [0.20E0, -0.60E0, 0.30E0, 5.0E0, 5.0E0, 5.0E0, 5.0E0, 5.0E0 :: Double])
-  dv5 <- V.slice $(known 0) $(known 4) $(known 1)
-         <$> $(litV [0.03E0, -0.09E0, 0.15E0, -0.03E0, 6.0E0, 6.0E0, 6.0E0, 6.0E0 :: Double])
-  pure Known {..}
-
-knownData2 :: ST s (Known s)
-knownData2 = do
-  dv1 <- V.slice $(known 0) $(known 0) $(known 2)
-         <$> $(litV [0.1E0, 8.0E0, 8.0E0, 8.0E0, 8.0E0, 8.0E0, 8.0E0, 8.0E0 :: Double])
-  dv2 <- V.slice $(known 0) $(known 1) $(known 2)
-         <$> $(litV [0.3E0, 9.0E0, 9.0E0, 9.0E0, 9.0E0, 9.0E0, 9.0E0, 9.0E0 :: Double])
-  dv3 <- V.slice $(known 0) $(known 2) $(known 2)
-         <$> $(litV [0.3E0, 2.0E0, -0.4E0, 2.0E0, 2.0E0, 2.0E0, 2.0E0, 2.0E0 :: Double])
-  dv4 <- V.slice $(known 0) $(known 3) $(known 2)
-         <$> $(litV [0.2E0, 3.0E0, -0.6E0, 5.0E0, 0.3E0, 2.0E0, 2.0E0, 2.0E0 :: Double])
-  dv5 <- V.slice $(known 0) $(known 4) $(known 2)
-         <$> $(litV [0.1E0, 4.0E0, -0.3E0, 6.0E0, -0.5E0, 7.0E0, -0.1E0, 3.0E0 :: Double])
-  pure Known {..}
-
-knownScaled2 :: ST s (Known s)
-knownScaled2 = do
-  dv1 <- V.slice $(known 0) $(known 0) $(known 2)
-         <$> $(litV [0.10E0, 8.0E0, 8.0E0, 8.0E0, 8.0E0, 8.0E0, 8.0E0, 8.0E0 :: Double])
-  dv2 <- V.slice $(known 0) $(known 1) $(known 2)
-         <$> $(litV [0.09E0, 9.0E0, 9.0E0, 9.0E0, 9.0E0, 9.0E0, 9.0E0, 9.0E0 :: Double])
-  dv3 <- V.slice $(known 0) $(known 2) $(known 2)
-         <$> $(litV [0.09E0, 2.0E0, -0.12E0, 2.0E0, 2.0E0, 2.0E0, 2.0E0, 2.0E0 :: Double])
-  dv4 <- V.slice $(known 0) $(known 3) $(known 2)
-         <$> $(litV [0.06E0, 3.0E0, -0.18E0, 5.0E0, 0.09E0, 2.0E0, 2.0E0, 2.0E0 :: Double])
-  dv5 <- V.slice $(known 0) $(known 4) $(known 2)
-         <$> $(litV [0.03E0, 4.0E0, -0.09E0, 6.0E0, -0.15E0, 7.0E0, -0.03E0, 3.0E0 :: Double])
-  pure Known {..}
-
-prop_nrm2_known :: Property
-prop_nrm2_known = property $ do
-  let
-    comp :: (forall s. ST s (Known s)) -> [Double]
-    comp dat = runST $ do
-      Known {..} <- dat
-      sequence
-        [ dnrm2 dv1
-        , dnrm2 dv2
-        , dnrm2 dv3
-        , dnrm2 dv4
-        , dnrm2 dv5
-        ]
-    true = [0.0E0, 0.3E0, 0.5E0, 0.7E0, 0.6E0]
-  comp knownData1 === true
-  comp knownData2 === true
-
 interleave :: (V s 5 Double, V s 5 Double) -> ST s (V s 5 Double, V s 5 Double)
 interleave (as, bs) = do
   cs <- V.new $(known 10)
@@ -212,23 +130,6 @@ interleave (as, bs) = do
 
 prop_nrm2_interleave :: Property
 prop_nrm2_interleave = mk_prop_interleave dnrm2
-
-prop_asum_known :: Property
-prop_asum_known = property $ do
-  let
-    true = [0.0E0, 0.3E0, 0.7E0, 1.1E0, 1.0E0]
-    comp :: (forall s. ST s (Known s)) -> [Double]
-    comp dat = runST $ do
-      Known {..} <- dat
-      sequence
-        [ dasum dv1
-        , dasum dv2
-        , dasum dv3
-        , dasum dv4
-        , dasum dv5
-        ]
-  comp knownData1 === true
-  comp knownData2 === true
 
 prop_asum_empty_lit :: Property
 prop_asum_empty_lit = property $ do
@@ -311,23 +212,6 @@ mk_prop_interleave f = property $ do
 
 prop_asum_interleave :: Property
 prop_asum_interleave = mk_prop_interleave dasum
-
-prop_iamax_known :: Property
-prop_iamax_known = property $ do
-  let
-    true = [0, 0, 1, 1, 2]
-    comp :: (forall s. ST s (Known s)) -> [CSize]
-    comp dat = runST $ do
-      Known {..} <- dat
-      sequence
-        [ idamax dv1
-        , idamax dv2
-        , idamax dv3
-        , idamax dv4
-        , idamax dv5
-        ]
-  comp knownData1 === true
-  comp knownData2 === true
 
 prop_scal_identity :: Property
 prop_scal_identity = property $ do
