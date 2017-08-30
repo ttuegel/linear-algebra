@@ -430,7 +430,7 @@ fromList n as
 toList :: Storable a => V s n a -> ST s [a]
 toList = foldr (:) []
 
-litV :: TH.Lift a => [a] -> Q Exp
+litV :: (TH.Lift a, Storable a) => [a] -> Q Exp
 litV as =
   let
     n = fromIntegral (Prelude.length as)
