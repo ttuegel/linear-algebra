@@ -21,33 +21,60 @@ flag use-int64
 library
   hs-source-dirs:
       src/
-  default-extensions: DataKinds DeriveDataTypeable DuplicateRecordFields FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MultiParamTypeClasses OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators
+  default-extensions: BangPatterns DataKinds DeriveDataTypeable FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MagicHash MultiParamTypeClasses OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators UnboxedTuples ViewPatterns
   ghc-options: -Wall
   extra-libraries:
       openblas
   build-depends:
-      base >= 4.10
+      base
     , containers
+    , equational-reasoning
+    , ghc-prim
+    , ghc-typelits-presburger
     , inline-c
     , parsers
     , primitive
     , template-haskell
     , transformers
+    , transformers-base
     , vector
   if flag(use-int64)
-    cpp-options: -DINT=int64_t
+    cpp-options: -DUSE_INT64
   exposed-modules:
-      Data.Dim
       Data.Int.Blas
-  other-modules:
       Data.Vector.Blas
+      Numeric.LinearAlgebra.Blas
+  other-modules:
       Internal.Blas
       Internal.Endo
       Internal.Int
       Internal.Matrix
-      Internal.Mut
       Internal.TH
       Internal.Vector
       Internal.Writer
       Paths_linear_algebra
+  default-language: Haskell2010
+
+test-suite dblat
+  type: exitcode-stdio-1.0
+  main-is: dblat.hs
+  hs-source-dirs:
+      tests/
+  default-extensions: BangPatterns DataKinds DeriveDataTypeable FlexibleContexts FlexibleInstances GADTs GeneralizedNewtypeDeriving KindSignatures LambdaCase MagicHash MultiParamTypeClasses OverloadedStrings PatternSynonyms RankNTypes RecordWildCards ScopedTypeVariables TypeFamilies TypeOperators UnboxedTuples ViewPatterns
+  ghc-options: -Wall
+  build-depends:
+      base
+    , containers
+    , equational-reasoning
+    , ghc-prim
+    , ghc-typelits-presburger
+    , inline-c
+    , parsers
+    , primitive
+    , template-haskell
+    , transformers
+    , transformers-base
+    , vector
+    , hedgehog
+    , linear-algebra
   default-language: Haskell2010

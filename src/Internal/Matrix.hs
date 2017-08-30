@@ -1,11 +1,8 @@
 module Internal.Matrix where
 
-import Foreign.ForeignPtr (ForeignPtr, withForeignPtr)
-import Foreign.Ptr (Ptr)
+import Foreign.ForeignPtr (ForeignPtr)
 
-import Data.Dim
 import Internal.Int
-import Internal.Mut
 
 
 data UpLo = Upper | Lower
@@ -27,122 +24,84 @@ transToI NoTrans = 111
 transToI Trans = 112
 transToI ConjTrans = 113
 
-data GE (m :: Dim) (n :: Dim) a
-  = GE !Trans
-    {-# UNPACK #-} !I  -- rows
-    {-# UNPACK #-} !I  -- columns
-    {-# UNPACK #-} !(ForeignPtr a)
-    {-# UNPACK #-} !I  -- leading dimension
+data GE :: * -> (Nat, Nat) -> * -> * where
+  GE ::
+    { getrans :: !Trans
+    , gedim   :: {-# UNPACK #-} !(N m)
+    , gecodim :: {-# UNPACK #-} !(N n)
+    , geptr   :: {-# UNPACK #-} !(ForeignPtr a)
+    , gelead  :: {-# UNPACK #-} !I
+    }
+    -> GE s '(m, n) a
 
-unsafeWithGE
-  :: GE m n a
-  -> (Trans -> I -> I -> Ptr a -> I -> IO b)
-  -> IO b
-unsafeWithGE (GE tr nr nc fp ld) cont =
-  withForeignPtr fp $ \p -> cont tr nr nc p ld
+data GB :: * -> (Nat, Nat) -> * -> * where
+  GB ::
+    { gbtrans     :: !Trans
+    , gbdim       :: {-# UNPACK #-} !(N m)
+    , gbcodim     :: {-# UNPACK #-} !(N n)
+    , gbsubdiag   :: {-# UNPACK #-} !I
+    , gbsuperdiag :: {-# UNPACK #-} !I
+    , gbptr       :: {-# UNPACK #-} !(ForeignPtr a)
+    , gblead      :: {-# UNPACK #-} !I
+    }
+    -> GB s '(m, n) a
 
-withGE
-  :: Mut (GE m n) s a
-  -> (Trans -> I -> I -> Ptr a -> I -> IO b)
-  -> IO b
-withGE (Mut (GE tr nr nc fp ld)) cont =
-  withForeignPtr fp $ \p -> cont tr nr nc p ld
+data HE :: * -> (Nat, Nat) -> * -> * where
+  HE ::
+    { heuplo :: !UpLo
+    , hedim  :: {-# UNPACK #-} !(N n)
+    , heptr  :: {-# UNPACK #-} !(ForeignPtr a)
+    , helead :: {-# UNPACK #-} !I
+    }
+    -> HE s '(n, n) a
 
-data GB (m :: Dim) (n :: Dim) a
-  = GB !Trans
-    {-# UNPACK #-} !I  -- rows
-    {-# UNPACK #-} !I  -- columns
-    {-# UNPACK #-} !I  -- sub-diagonals
-    {-# UNPACK #-} !I  -- super-diagonals
-    {-# UNPACK #-} !(ForeignPtr a)
-    {-# UNPACK #-} !I  -- leading dimension
+data HB :: * -> (Nat, Nat) -> * -> * where
+  HB ::
+    { hbuplo    :: !UpLo
+    , hbdim     :: {-# UNPACK #-} !(N n)
+    , hboffdiag :: {-# UNPACK #-} !I
+    , hbptr     :: {-# UNPACK #-} !(ForeignPtr a)
+    , hblead    :: {-# UNPACK #-} !I
+    }
+    -> HB s '(n, n) a
 
-unsafeWithGB
-  :: GB m n a
-  -> (Trans -> I -> I -> I -> I -> Ptr a -> I -> IO b)
-  -> IO b
-unsafeWithGB (GB tr nr nc kl ku fp ld) cont =
-  withForeignPtr fp $ \p -> cont tr nr nc kl ku p ld
+data HP :: * -> (Nat, Nat) -> * -> * where
+  HP ::
+    { hpuplo :: !UpLo
+    , hpdim  :: {-# UNPACK #-} !(N n)
+    , hpptr  :: {-# UNPACK #-} !(ForeignPtr a)
+    }
+    -> HP s '(n, n) a
 
-data HE (n :: Dim) a
-  = HE !UpLo
-    {-# UNPACK #-} !I  -- dimension
-    {-# UNPACK #-} !(ForeignPtr a)
-    {-# UNPACK #-} !I  -- leading dimension
+data TR :: * -> (Nat, Nat) -> * -> * where
+  TR ::
+    { truplo  :: !UpLo
+    , trtrans :: !Trans
+    , trdiag  :: !Diag
+    , trdim   :: {-# UNPACK #-} !(N n)  -- dimension
+    , trptr   :: {-# UNPACK #-} !(ForeignPtr a)
+    , trlead  :: {-# UNPACK #-} !I  -- leading dimension
+    }
+    -> TR s '(n, n) a
 
-unsafeWithHE :: HE n a -> (UpLo -> I -> Ptr a -> I -> IO b) -> IO b
-unsafeWithHE (HE up nn fp ld) cont =
-  withForeignPtr fp $ \p -> cont up nn p ld
+data TB :: * -> (Nat, Nat) -> * -> * where
+  TB ::
+    { tbuplo    :: !UpLo
+    , tbtrans   :: !Trans
+    , tbdiag    :: !Diag
+    , tbdim     :: {-# UNPACK #-} !(N n)  -- dimension
+    , tboffdiag :: {-# UNPACK #-} !I  -- off-diagonals
+    , tbptr     :: {-# UNPACK #-} !(ForeignPtr a)
+    , tblead    :: {-# UNPACK #-} !I  -- leading dimension
+    }
+    -> TB s '(n, n) a
 
-withHE
-  :: Mut (HE n) s a
-  -> (UpLo -> I -> Ptr a -> I -> IO b)
-  -> IO b
-withHE (Mut (HE up nn fp ld)) cont =
-  withForeignPtr fp $ \p -> cont up nn p ld
-
-data HB (n :: Dim) a
-  = HB !UpLo
-    {-# UNPACK #-} !I  -- dimension
-    {-# UNPACK #-} !I  -- sub- or super-diagonals
-    {-# UNPACK #-} !(ForeignPtr a)
-    {-# UNPACK #-} !I  -- leading dimension
-
-unsafeWithHB :: HB n a -> (UpLo -> I -> I -> Ptr a -> I -> IO b) -> IO b
-unsafeWithHB (HB up nn kk fp ld) cont =
-  withForeignPtr fp $ \p -> cont up nn kk p ld
-
-data HP (n :: Dim) a
-  = HP !UpLo
-    {-# UNPACK #-} !I  -- dimension
-    {-# UNPACK #-} !(ForeignPtr a)
-
-unsafeWithHP :: HP n a -> (UpLo -> I -> Ptr a -> IO b) -> IO b
-unsafeWithHP (HP up nn fp) cont =
-  withForeignPtr fp $ \p -> cont up nn p
-
-withHP
-  :: Mut (HP n) s a
-  -> (UpLo -> I -> Ptr a -> IO b)
-  -> IO b
-withHP (Mut (HP up nn fp)) cont =
-  withForeignPtr fp $ \ p -> cont up nn p
-
-data TR (n :: Dim) a
-  = TR !UpLo !Trans !Diag
-    {-# UNPACK #-} !I  -- dimension
-    {-# UNPACK #-} !(ForeignPtr a)
-    {-# UNPACK #-} !I  -- leading dimension
-
-unsafeWithTR
-  :: TR n a
-  -> (UpLo -> Trans -> Diag -> I -> Ptr a -> I -> IO b)
-  -> IO b
-unsafeWithTR (TR up tr di nn fp ld) cont =
-  withForeignPtr fp $ \p -> cont up tr di nn p ld
-
-data TB (n :: Dim) a
-  = TB !UpLo !Trans !Diag
-    {-# UNPACK #-} !I  -- dimension
-    {-# UNPACK #-} !I  -- off-diagonals
-    {-# UNPACK #-} !(ForeignPtr a)
-    {-# UNPACK #-} !I  -- leading dimension
-
-unsafeWithTB
-  :: TB n a
-  -> (UpLo -> Trans -> Diag -> I -> I -> Ptr a -> I -> IO b)
-  -> IO b
-unsafeWithTB (TB up tr di nn kk fp ld) cont =
-  withForeignPtr fp $ \p -> cont up tr di nn kk p ld
-
-data TP (n :: Dim) a
-  = TP !UpLo !Trans !Diag
-    {-# UNPACK #-} !I  -- dimension
-    {-# UNPACK #-} !(ForeignPtr a)
-
-unsafeWithTP
-  :: TP n a
-  -> (UpLo -> Trans -> Diag -> I -> Ptr a -> IO b)
-  -> IO b
-unsafeWithTP (TP up tr di nn fp) cont =
-  withForeignPtr fp $ \p -> cont up tr di nn p
+data TP :: * -> (Nat, Nat) -> * -> * where
+  TP ::
+    { tpuplo  :: !UpLo
+    , tptrans :: !Trans
+    , tpdiag  :: !Diag
+    , tpdim   :: {-# UNPACK #-} !(N n)  -- dimension
+    , tpptr   :: {-# UNPACK #-} !(ForeignPtr a)
+    }
+    -> TP s '(n, n) a

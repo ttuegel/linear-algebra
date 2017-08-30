@@ -14,15 +14,16 @@ flags:
 ghc-options: -Wall
 
 default-extensions:
+  - BangPatterns
   - DataKinds
   - DeriveDataTypeable
-  - DuplicateRecordFields
   - FlexibleContexts
   - FlexibleInstances
   - GADTs
   - GeneralizedNewtypeDeriving
   - KindSignatures
   - LambdaCase
+  - MagicHash
   - MultiParamTypeClasses
   - OverloadedStrings
   - PatternSynonyms
@@ -31,24 +32,39 @@ default-extensions:
   - ScopedTypeVariables
   - TypeFamilies
   - TypeOperators
+  - UnboxedTuples
+  - ViewPatterns
 
 dependencies:
-  - base >= 4.10
+  - base
   - containers
+  - equational-reasoning
+  - ghc-prim
+  - ghc-typelits-presburger
   - inline-c
   - parsers
   - primitive
   - template-haskell
   - transformers
+  - transformers-base
   - vector
 
 library:
   source-dirs: src/
   exposed-modules:
-    - Data.Dim
     - Data.Int.Blas
+    - Data.Vector.Blas
+    - Numeric.LinearAlgebra.Blas
   extra-libraries:
     - openblas
   when:
     - condition: flag(use-int64)
-      cpp-options: -DINT=int64_t
+      cpp-options: -DUSE_INT64
+
+tests:
+  dblat:
+    source-dirs: tests/
+    main: dblat.hs
+    dependencies:
+      - hedgehog
+      - linear-algebra

@@ -1,135 +1,79 @@
-module Internal.Vector where
+{-# LANGUAGE TemplateHaskell #-}
 
+module Internal.Vector
+    ( V(..), bounds, Storable
+    , new, unsafeNew, copy, slice
+    , read, write
+    , unsafeRead, unsafeWrite
+    ) where
+
+import Control.Monad (when)
+import Control.Monad.ST
 import Control.Monad.Primitive
-import Foreign.ForeignPtr
-       ( ForeignPtr, mallocForeignPtrArray, plusForeignPtr, withForeignPtr )
-import Foreign.Marshal.Array (advancePtr)
-import Foreign.Marshal.Utils (fillBytes)
-import Foreign.Ptr (Ptr)
-import Foreign.Storable (Storable, peekElemOff, pokeElemOff, sizeOf)
-import Data.Vector.Generic (Mutable, Vector)
-import Data.Vector.Generic.Mutable (MVector(..))
+import Foreign.ForeignPtr ( ForeignPtr, mallocForeignPtrArray, withForeignPtr )
+import Foreign.Storable (Storable, peekElemOff, pokeElemOff)
+import Prelude hiding (read)
 
-import qualified Data.Vector.Generic as Vector
-
-import Data.Dim
-import Data.Int.Blas
-import Internal.Mut
+import Internal.Int
 
 
-data V (n :: Dim) a
-  = V
-    {-# UNPACK #-} !I
-    {-# UNPACK #-} !(ForeignPtr a)
-    {-# UNPACK #-} !I
+data V s (n :: Nat) a
+  = V { vdim :: {-# UNPACK #-} !(N n)
+      , vptr :: {-# UNPACK #-} !(ForeignPtr a)
+      , voff :: {-# UNPACK #-} !I
+      , vinc :: {-# UNPACK #-} !I
+      }
 
-class Vec v where
-  dimV :: v a -> I
+bounds :: V s n a -> (N 0, N n)
+bounds (V {..}) = ($(known 0), vdim)
 
-instance Vec v => Vec (Mut v s) where
-  dimV (Mut v) = dimV v
+unsafeNew :: Storable a => I -> ST s (V s n a)
+unsafeNew n =
+  unsafePrimToST $ do
+    vptr <- mallocForeignPtrArray (fromIntegral n)
+    let
+      vdim = N n
+      voff = 0
+      vinc = 1
+    pure V {..}
 
-instance Vec (V n) where
-  dimV (V n _ _) = n
+new :: Storable a => N n -> ST s (V s n a)
+new n = unsafeNew (fromN n)
 
-type instance Mutable (V n) = Mut (V n)
+read :: (Storable a, u <= n) => V s n a -> B l u -> ST s a
+read v i = unsafeRead v (fromB i)
 
-instance Storable a => MVector (Mut (V n)) a where
-  {-# INLINE basicLength #-}
-  basicLength (Mut (V n _ _)) = fromIntegral n
+unsafeRead :: Storable a => V s n a -> I -> ST s a
+unsafeRead (V {..}) i =
+  unsafePrimToST $
+  withForeignPtr vptr $ \ptr ->
+  peekElemOff ptr (fromIntegral (i * vinc + voff))
 
-  {-# INLINE basicUnsafeSlice #-}
-  basicUnsafeSlice start len (Mut (V _ fptr inc)) =
-    let off = start * fromIntegral inc in
-      Mut (V (fromIntegral len) (advanceForeignPtr fptr off) inc)
+write :: (Storable a, u <= n) => V s n a -> B l u -> a -> ST s ()
+write v i a = unsafeWrite v (fromB i) a
 
-  {-# INLINE basicOverlaps #-}
-  basicOverlaps (Mut (V lenx ptrx incx)) (Mut (V leny ptry incy)) =
-      between ptrx ptry (leny * incy)
-      || between ptry ptrx (lenx * incx)
-    where
-      between x y n = x >= y && x < advanceForeignPtr y (fromIntegral n)
+unsafeWrite :: Storable a => V s n a -> I -> a -> ST s ()
+unsafeWrite (V {..}) i a =
+  unsafePrimToST $
+  withForeignPtr vptr $ \ptr ->
+  pokeElemOff ptr (fromIntegral (i * vinc + voff)) a
 
-  {-# INLINE basicUnsafeNew #-}
-  basicUnsafeNew len
-    | len < 0 =
-        error ("Blas.basicUnsafeNew: negative length: " ++ show len)
-    | len > mx =
-        error ("Blas.basicUnsafeNew: length too large: " ++ show len)
-    | otherwise = unsafePrimToPrim $ do
-        ptr <- mallocForeignPtrArray len
-        pure $ Mut (V (fromIntegral len) ptr 1)
-    where
-      maxI = fromIntegral (maxBound :: I) :: Int
-      size = sizeOf (undefined :: Double)
-      mx = maxI `quot` size
+slice :: (Storable a, i <= n, i + 1 + d * l <= n + d) => N i -> N l -> N d -> V s n a -> V s l a
+slice i vdim' vinc' v =
+  V { vdim = vdim'
+    , vptr = vptr v
+    , voff = voff v + fromN i * vinc v
+    , vinc = fromN vinc' * vinc v
+    }
 
-  {-# INLINE basicInitialize #-}
-  basicInitialize (Mut (V len fptr inc)) =
-    unsafePrimToPrim $
-    withForeignPtr fptr $ \ptr -> do
-      let
-        end = fromIntegral (inc * len)
-        inc_ = fromIntegral inc
-        sz = sizeOf (undefined :: Double)
-
-        basicInitialize_go ix
-          | ix >= end = pure ()
-          | otherwise = do
-              fillBytes (advancePtr ptr ix) 0 sz
-              basicInitialize_go (ix + inc_)
-
-      basicInitialize_go 0
-
-  {-# INLINE basicUnsafeRead #-}
-  basicUnsafeRead (Mut (V _ fptr inc)) ix =
-    unsafePrimToPrim $
-      withForeignPtr fptr $ \ptr ->
-        peekElemOff ptr (ix * fromIntegral inc)
-
-  {-# INLINE basicUnsafeWrite #-}
-  basicUnsafeWrite (Mut (V _ fptr inc)) ix a = do
-    unsafePrimToPrim $
-      withForeignPtr fptr $ \ptr ->
-        pokeElemOff ptr (ix * fromIntegral inc) a
-
-instance Storable a => Vector (V n) a where
-  {-# INLINE basicUnsafeFreeze #-}
-  basicUnsafeFreeze (Mut v) = pure v
-
-  {-# INLINE basicUnsafeThaw #-}
-  basicUnsafeThaw v = pure (Mut v)
-
-  {-# INLINE basicLength #-}
-  basicLength (V len _ _) = fromIntegral len
-
-  {-# INLINE basicUnsafeSlice #-}
-  basicUnsafeSlice start len (V _ fptr inc) =
-    let off = start * fromIntegral inc in
-      V (fromIntegral len) (advanceForeignPtr fptr off) inc
-
-  {-# INLINE basicUnsafeIndexM #-}
-  basicUnsafeIndexM (V _ fptr inc) ix =
-    return . unsafeInlineIO $
-      withForeignPtr fptr $ \ptr ->
-        peekElemOff ptr (ix * fromIntegral inc)
-
-  {-# INLINE elemseq #-}
-  elemseq _ = seq
-
-advanceForeignPtr
-  :: forall a. Storable a =>
-     ForeignPtr a
-  -> Int
-  -> ForeignPtr a
-advanceForeignPtr fptr n = plusForeignPtr fptr (n * size)
-  where
-    size = sizeOf (undefined :: a)
-
-unsafeWithV :: V n a -> (I -> Ptr a -> I -> IO b) -> IO b
-unsafeWithV (V len fptr inc) cont =
-  withForeignPtr fptr $ \ptr -> cont len ptr inc
-
-withV :: Mut (V n) s a -> (I -> Ptr a -> I -> IO b) -> IO b
-withV (Mut (V len fptr inc)) cont =
-  withForeignPtr fptr $ \ptr -> cont len ptr inc
+copy :: Storable a =>
+        V s n a  -- ^ destination
+     -> V s n a  -- ^ source
+     -> ST s ()
+copy dst src = do
+  let
+    copy_go !i = do
+      unsafeRead src i >>= unsafeWrite dst i
+      when (i /= 0) (copy_go (i - 1))
+    n = fromN (vdim dst)
+  when (n > 0) (copy_go (n - 1))

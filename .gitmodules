@@ -1,3 +1,18 @@
 [submodule "nixpkgs"]
 	path = nixpkgs
 	url = https://github.com/NixOS/nixpkgs-channels.git
+[submodule "ghc-typelits-presburger"]
+	path = ghc-typelits-presburger
+	url = git@github.com:ttuegel/ghc-typelits-presburger.git
+[submodule "equational-reasoning-in-haskell"]
+	path = equational-reasoning
+	url = git@github.com:ttuegel/equational-reasoning-in-haskell.git
+[submodule "singletons"]
+	path = singletons
+	url = https://github.com/goldfirere/singletons.git
+[submodule "th-desugar"]
+	path = th-desugar
+	url = https://github.com/goldfirere/th-desugar.git
+[submodule "ghc-tcplugins-extra"]
+	path = ghc-tcplugins-extra
+	url = https://github.com/clash-lang/ghc-tcplugins-extra.git
